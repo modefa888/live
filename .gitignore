@@ -1,0 +1,7 @@
+node_modules/
+data/
+recordings/
+.backups/
+*.log
+.vercel
+config.local.json

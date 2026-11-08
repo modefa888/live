@@ -1,0 +1,2260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>后台管理 · 抖音直播监控</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#171e2e; --panel2:#1e2740; --line:#2a3554;
+    --txt:#e6ecf7; --dim:#8b98b8; --accent:#ff3b5c; --green:#22c55e;
+    --yellow:#eab308; --blue:#3b82f6; --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100vh;overflow:hidden}
+  body{background:radial-gradient(1200px 600px at 80% -10%,#1a2440 0%,var(--bg) 55%);color:var(--txt);
+       font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+  /* 认证前锁定：隐藏后台框架，避免未登录时闪现内容 */
+  body.locked .wrap{display:none}
+  /* 全局自定义滚动条（替代系统默认，覆盖弹窗/列表/表格等所有滚动区域） */
+  *::-webkit-scrollbar{width:6px;height:6px}
+  *::-webkit-scrollbar-track{background:transparent}
+  *::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  *::-webkit-scrollbar-thumb:hover{background:#4a5680}
+  *::-webkit-scrollbar-corner{background:transparent}
+  *{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+  .wrap{display:flex;flex-direction:column;height:100vh;max-width:1400px;margin:0 auto;padding:18px 20px 20px}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px;flex-shrink:0}
+  .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#a855f7);
+        display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px #6366f144}
+  h1{font-size:20px;font-weight:700}
+  .sub{color:var(--dim);font-size:12px;margin-top:2px}
+  .spacer{flex:1}
+  .btn{border:none;cursor:pointer;color:#fff;background:var(--panel2);border:1px solid var(--line);
+       padding:8px 14px;border-radius:10px;font-size:13px;transition:.15s;display:inline-flex;align-items:center;gap:6px}
+  .btn:hover{border-color:#4a5a85;transform:translateY(-1px)}
+  .btn.primary{background:linear-gradient(135deg,#6366f1,#a855f7);border:none}
+  .btn.ghost{background:transparent}
+  .btn.danger{color:#ff6b81}
+  .btn.danger:hover{border-color:#ff3b5c;background:#ff3b5c22}
+  .btn.sm{padding:5px 10px;font-size:12px;border-radius:8px}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+  .modal-mask{position:fixed;inset:0;background:#00000088;backdrop-filter:blur(3px);display:none;
+              align-items:center;justify-content:center;z-index:50;padding:16px}
+  .modal-mask.show{display:flex}
+  #confirmMask{z-index:9999}
+  /* 登录遮罩：置顶使用（隐藏后台框架，形成锁屏） */
+  #loginMask{background:var(--bg);backdrop-filter:none;z-index:10000}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:600px;width:100%;
+         max-height:92vh;overflow:auto;box-shadow:0 20px 60px #000000aa}
+  .modal-head{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:2}
+  .modal-head h3{flex:1;font-size:15px}
+  .modal-body{padding:16px 18px}
+  .confirm-msg{font-size:14px;padding:8px 0}
+  input,select,textarea{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+        border-radius:10px;padding:9px 12px;font-size:13px;width:100%;outline:none}
+  input:focus,select:focus{border-color:var(--accent)}
+  label{display:block;font-size:12px;color:var(--dim);margin:12px 0 6px}
+  .hint{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.7}
+  #toasts{position:fixed;top:16px;right:16px;z-index:99;display:flex;flex-direction:column;gap:10px}
+  .toast{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--accent);
+         border-radius:12px;padding:12px 16px;min-width:240px;max-width:340px;box-shadow:0 8px 30px #00000088;
+         animation:slidein .25s ease}
+  .toast.ok{border-left-color:var(--green)}
+  .toast.warn{border-left-color:var(--yellow)}
+  @keyframes slidein{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
+  .toast b{display:block;margin-bottom:3px}
+  .toast span{font-size:12px;color:var(--dim)}
+
+  .layout{display:grid;grid-template-columns:240px 1fr;grid-template-rows:minmax(0,1fr);gap:16px;flex:1;min-height:0;overflow:hidden;position:relative;
+           transition:grid-template-columns .22s ease,gap .22s ease}
+  .layout.collapsed{grid-template-columns:48px 1fr;gap:8px}
+  .sidebar{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 10px;
+           overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;min-height:0;
+           transition:padding .18s ease,border .18s ease}
+  .layout.collapsed .sidebar{padding:12px 5px;align-items:center}
+  .sidebar::-webkit-scrollbar{width:6px}
+  .sidebar::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  .sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .sidebar-collapse{flex-shrink:0;padding:2px 6px;font-size:11px;line-height:1;border-radius:6px}
+  .layout.collapsed .sidebar-head{justify-content:center}
+  .layout.collapsed .sidebar-title{display:none}
+  .layout.collapsed .sidebar-item{width:100%;padding:9px 0;text-align:center;display:flex;align-items:center;justify-content:center}
+  .layout.collapsed .sidebar-item span{display:none}
+  .layout.collapsed .sidebar-item::before{content:attr(data-short);font-size:13px;line-height:1}
+  .sidebar-item{padding:9px 12px;border-radius:10px;font-size:13px;color:var(--dim);cursor:pointer;
+                display:flex;align-items:center;justify-content:space-between;transition:.15s}
+  .sidebar-item:hover{background:var(--panel2);color:var(--txt)}
+  .sidebar-item.active{background:#6366f122;color:#a78bfa}
+  .sidebar-item .cnt{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--panel2)}
+  .sidebar-item.active .cnt{background:#6366f144;color:#a78bfa}
+  .sidebar-title{font-size:11px;color:var(--dim);padding:4px 12px;margin-bottom:4px;letter-spacing:1px}
+
+  .main-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;
+           display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  #dashboardView{flex:1;min-height:0;overflow-y:auto;padding-right:8px}
+  #dashboardView::-webkit-scrollbar{width:6px}
+  #dashboardView::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  #tableView{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  #tableContent{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .panel-head{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+  .panel-head h3{font-size:15px;font-weight:600;flex-shrink:0}
+  .search-box{flex:1;max-width:300px}
+  .toolbar{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .toolbar-right{margin-left:auto}
+
+  .table-wrap{flex:1;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:10px}
+  .table-wrap::-webkit-scrollbar{width:6px;height:6px}
+  .table-wrap::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  .table-wrap::-webkit-scrollbar-corner{background:transparent}
+  table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;min-width:0;overflow:hidden}
+  th{color:var(--dim);font-weight:500;background:var(--panel2);position:sticky;top:0}
+  td.val{max-width:300px;word-break:break-all;color:#9db4e8;font-size:11px;overflow:hidden;text-overflow:ellipsis}
+  td.val.expandable{cursor:pointer;max-width:200px}
+  td.val.expandable:hover{background:#2a3554}
+  .full-text{display:block;max-height:100px;overflow:auto;word-break:break-all;line-height:1.5}
+  .short-text{display:inline;max-width:200px;overflow:hidden;text-overflow:ellipsis}
+  tr:hover{background:var(--panel2)}
+  .row-actions{display:flex;gap:4px}
+  .row-actions .btn{padding:3px 7px;font-size:11px}
+
+  .pagination{display:flex;align-items:center;gap:6px;margin-top:10px;justify-content:center;flex-wrap:wrap;flex-shrink:0;padding-top:8px;border-top:1px solid var(--line)}
+  .pagination .btn{padding:5px 10px;font-size:12px}
+  .pagination .btn.active{background:#6366f144;border-color:#6366f1;color:#fff}
+  .pagination .info{font-size:11px;color:var(--dim);margin:0 8px}
+
+  .empty{text-align:center;color:var(--dim);padding:60px 20px;border:2px dashed var(--line);border-radius:var(--radius)}
+  .empty .big{font-size:40px;margin-bottom:8px}
+
+  .dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:10px;width:100%}
+  .dash-card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer;transition:.15s}
+  .dash-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .dash-card h4{font-size:13px;margin:0}
+  .dash-card .desc{font-size:11px;color:var(--dim)}
+  .dash-card .dc-head{display:flex;align-items:center;gap:10px}
+  .dash-card .dc-ico{font-size:17px;width:36px;height:36px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .dash-card .dc-count{font-size:22px;font-weight:700;margin-top:10px;color:var(--txt);line-height:1}
+
+  /* ---------- 仪表盘总览 ---------- */
+  .mini-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:12px}
+  .mini-card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:11px;transition:.15s}
+  .mini-card:hover{border-color:var(--accent)}
+  .mini-card .ico{font-size:18px;width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--bg);flex-shrink:0}
+  .mini-card .v{font-size:20px;font-weight:700;line-height:1.1;color:var(--txt)}
+  .mini-card .v.ok{color:#22c55e}
+  .mini-card .l{font-size:11px;color:var(--dim);margin-top:3px}
+  .chart-row{display:flex;gap:12px;margin-top:12px;flex-wrap:wrap}
+  .chart-panel{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:280px}
+  .chart-title{font-size:13px;font-weight:600;margin-bottom:10px}
+  .chart-empty{color:var(--dim);font-size:12px;text-align:center;padding:36px 0}
+  .lgd{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--dim)}
+  .lgd i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+
+  .edit-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
+  .edit-row .col-key{width:120px;flex-shrink:0;font-size:12px;color:var(--dim);padding-top:9px}
+  .edit-row .col-val{flex:1}
+  .edit-row textarea{width:100%;min-height:90px;resize:vertical;line-height:1.5}
+
+  /* ---------- 设置 / 通知 / 备份（迁移自主页） ---------- */
+  .switch{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--dim)}
+  .switch input{width:auto}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px;flex-wrap:wrap}
+  .tab{padding:8px 14px;cursor:pointer;font-size:13px;color:var(--dim);border-bottom:2px solid transparent;white-space:nowrap}
+  .tab.active{color:var(--txt);border-bottom-color:var(--accent)}
+  .tabpage{display:none}.tabpage.active{display:block}
+  #backupMask{z-index:9998}
+  #fudaiExtractMask{z-index:9997}
+  .nccard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+  .nchead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .nchead h4{flex:1;font-size:14px}
+  .ncstatus{font-size:11px;padding:3px 10px;border-radius:12px;border:1px solid var(--line)}
+  .ncstatus.on{background:#0d3320;color:var(--green);border-color:#166534}
+  .ncstatus.off{background:#1e1b2e;color:#8b98b8;border-color:var(--line)}
+  .ncrow{display:flex;gap:10px}
+  .ncrow > *{flex:1}
+  .nctip{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.7}
+  .nctip code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:#9db4e8}
+  .nclogitem{font-size:11px;padding:6px 0;border-bottom:1px dashed var(--line);color:var(--dim);display:flex;gap:8px;flex-wrap:wrap}
+  .nclogitem .lv-ok{color:var(--green)}
+  .nclogitem .lv-err{color:#ff6b81}
+  .nclogitem .lv-warn{color:#facc15}
+  .nclogitem .log-streamer{color:#a78bfa;font-weight:600;flex-shrink:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nctoggle{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer}
+  .nctoggle input{width:auto}
+  .nctestbtn{margin-top:10px}
+</style>
+</head>
+<body class="locked">
+<div id="toasts"></div>
+<div class="wrap">
+  <header>
+    <div class="logo">📊</div>
+    <div>
+      <h1>后台管理</h1>
+      <div class="sub">数据库管理 · 抖音直播监控</div>
+    </div>
+    <div class="spacer"></div>
+    <div id="authStatus"></div>
+    <button class="btn" onclick="openSettings()" title="监控设置">⚙️ 设置</button>
+    <button class="btn" onclick="openBackupCenter()" title="备份/回档">📦 备份</button>
+    <button class="btn" onclick="openNotifyCenter()" title="通知中心">🔔 通知</button>
+    <span style="font-size:12px;padding:4px 10px;border-radius:8px;background:#3b82f622;color:#3b82f6;font-weight:600">🔷 MongoDB</span>
+    <span id="dbStatus" style="font-size:11px;color:var(--dim);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+    <a href="/" class="btn ghost" title="返回主页" style="text-decoration:none">← 主页</a>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <div class="sidebar-title" style="margin:0">📋 数据表</div>
+        <button class="btn sm ghost sidebar-collapse" onclick="toggleSidebar()" title="收起侧边栏">◀</button>
+      </div>
+      <div class="sidebar-item" data-short="📊" onclick="backToDashboard()" style="margin-bottom:8px;border-bottom:1px solid var(--line);padding-bottom:9px"><span>📊 仪表盘</span></div>
+      <div class="sidebar-item" data-short="🔄" onclick="refreshStreamers()" style="margin-bottom:8px;border-bottom:1px solid var(--line);padding-bottom:9px"><span>🔄 刷新主播</span></div>
+      <div id="sidebarList"></div>
+    </aside>
+    <main class="main-panel">
+      <div id="dashboardView">
+        <div class="mini-grid" id="ovMiniStats"></div>
+        <div class="chart-row">
+          <div class="chart-panel" style="flex:1.7;min-width:340px">
+            <div class="chart-title">📈 近 14 天开播趋势</div>
+            <div id="chartLiveTrend"></div>
+          </div>
+          <div class="chart-panel" style="flex:1;min-width:240px">
+            <div class="chart-title">🟢 主播在线状态</div>
+            <div id="chartOnline"></div>
+          </div>
+        </div>
+        <div class="chart-row">
+          <div class="chart-panel" style="flex:1.7;min-width:340px">
+            <div class="chart-title">📚 数据表记录数</div>
+            <div id="chartTables"></div>
+          </div>
+          <div class="chart-panel" style="flex:1;min-width:240px">
+            <div class="chart-title">📜 近 7 天系统日志</div>
+            <div id="chartLogs"></div>
+          </div>
+        </div>
+        <div class="panel-head" style="margin-top:16px">
+          <h3>🗂 数据表</h3>
+          <button class="btn sm" onclick="loadDashboard()">🔄 刷新统计</button>
+        </div>
+        <div class="dash-grid" id="dashGrid"></div>
+      </div>
+      <div id="tableView" style="display:none">
+        <div class="panel-head">
+          <h3 id="tableTitle">表名</h3>
+          <div class="search-box">
+            <input id="searchInput" placeholder="🔍 搜索..." onkeydown="if(event.key==='Enter')refreshTable()">
+          </div>
+        </div>
+        <div class="toolbar">
+          <span id="tableInfo" style="font-size:12px;color:var(--dim)"></span>
+          <span class="toolbar-right">
+            <button class="btn sm" onclick="refreshTable()">🔄 刷新</button>
+            <button class="btn sm" onclick="exportTable()">📥 导出</button>
+          </span>
+        </div>
+        <div id="tableLoading" style="text-align:center;color:var(--dim);padding:40px;font-size:12px;flex:1;min-height:0">加载中...</div>
+        <div id="tableContent" style="display:none">
+          <div id="tableWrap" class="table-wrap"></div>
+          <div class="pagination" id="pagination"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="modal-mask" id="confirmMask">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head"><h3 id="confirmTitle">确认</h3><button class="btn sm ghost" onclick="closeModal('confirmMask')">✕</button></div>
+    <div class="modal-body">
+      <p class="confirm-msg" id="confirmMsg"></p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn ghost" onclick="closeModal('confirmMask')">取消</button>
+        <button class="btn primary" id="confirmOk">确定</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="editMask">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-head"><h3 id="editTitle">编辑</h3><button class="btn sm ghost" onclick="closeModal('editMask')">✕</button></div>
+    <div class="modal-body" style="max-height:60vh;overflow:auto">
+      <div id="editError" style="font-size:12px;color:#f87171;margin-bottom:8px"></div>
+      <div id="editFields"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn ghost" onclick="closeModal('editMask')">取消</button>
+        <button class="btn primary" id="editSubmitBtn" onclick="saveEdit()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="loginMask">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-head"><h3>🔐 登录</h3><button class="btn sm ghost" onclick="closeModal('loginMask')">✕</button></div>
+    <div class="modal-body">
+      <form id="loginForm" onsubmit="doLogin();return false">
+        <label>用户名</label>
+        <input id="loginUsername" name="username" required autocomplete="username">
+        <label>密码</label>
+        <input id="loginPassword" name="password" type="password" required autocomplete="current-password">
+        <p id="loginError" style="font-size:12px;color:#f87171;margin:8px 0"></p>
+        <button type="submit" class="btn primary" id="loginSubmitBtn" style="width:100%;margin-top:8px">登录</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 福袋参数提取弹窗 -->
+<div class="modal-mask" id="fudaiExtractMask">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-head">
+      <h3>📋 一键获取福袋参数</h3>
+      <span style="font-size:11px;color:var(--dim)">从浏览器 Console 提取 Cookie/msToken/a_bogus</span>
+      <button class="btn sm ghost" onclick="closeModal('fudaiExtractMask')">✕</button>
+    </div>
+    <div class="modal-body">
+      <ol style="padding-left:18px;margin-bottom:10px;font-size:12px;color:var(--dim);line-height:1.9">
+        <li>打开一个 <b>抖音直播间</b>（确保正在直播）</li>
+        <li>按 <b>F12</b> → 切换到 <b>Console</b> 面板</li>
+        <li>点击下方「复制代码」→ 切回抖音页面 → <b>Ctrl+V</b></li>
+        <li><b style="color:#f87171">如被拦截</b>（黄色提示条）→ 在 Console 输入 <b>allow pasting</b> → 回车</li>
+        <li>再次 <b>Ctrl+V</b> → 回车 → 代码自动执行</li>
+        <li>查看 Console 输出的 <b>JSON</b> → 复制 → 粘贴到设置页「📥 粘贴参数」</li>
+      </ol>
+      <div style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;position:relative">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:11px;color:var(--dim)">在抖音直播间 Console 中执行：</span>
+          <button class="btn sm" onclick="copyFudaiScript()" style="font-size:11px">📋 复制代码</button>
+        </div>
+        <pre id="fudaiExtractScript" style="font-size:11px;line-height:1.5;overflow-x:auto;color:#9db4e8;white-space:pre-wrap;word-break:break-all;max-height:280px;overflow-y:auto"></pre>
+      </div>
+      <div class="hint" style="margin-top:10px;color:#f87171;font-size:11px;line-height:1.7">
+        ⚠️ 注意：请在 <b>live.douyin.com</b> 直播间页面执行，不要在设置页执行<br>
+        ⚠️ Chrome 拦截粘贴时，输入 <b>allow pasting</b> 回车后需再 Ctrl+V 一次才能成功
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 设置弹窗 -->
+<div class="modal-mask" id="settingsMask">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-head"><h3>⚙️ 设置</h3><button class="btn sm ghost" onclick="closeModal('settingsMask')">✕</button></div>
+    <div class="modal-body">
+      <div class="tabs">
+        <div class="tab active" onclick="tab(this,'tabSetBase')">基础</div>
+        <div class="tab" onclick="tab(this,'tabSetFudai')">福袋</div>
+        <div class="tab" onclick="tab(this,'tabSetSquare')">🛰 广场</div>
+        <div class="tab" onclick="tab(this,'tabSetNotify')">通知</div>
+        <div class="tab" onclick="tab(this,'tabSetStorage')">💾 存储</div>
+        <div class="tab" onclick="tab(this,'tabSetDb')">🗄 数据库</div>
+        <div class="tab" onclick="tab(this,'tabSetData')">数据</div>
+      </div>
+
+      <!-- Tab: 基础设置 -->
+      <div class="tabpage active" id="tabSetBase">
+        <label>自动刷新间隔(秒, 10~3600)</label>
+        <input type="number" id="cfgInterval" min="10" max="3600">
+        <label>自定义 Cookie(可选, 被风控时填写)</label>
+        <textarea id="cfgCookie" rows="3" placeholder="ttwid=...; __ac_signature=..."></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
+          <button class="btn sm ghost" onclick="revealCookie('cfgCookie','cookie')">👁 显示/编辑</button>
+          <span id="cfgCookieHint" style="font-size:10px;color:var(--dim)"></span>
+        </div>
+        <label>代理地址（可选，如 http://127.0.0.1:7890）</label>
+        <input id="cfgProxy" placeholder="http://127.0.0.1:7890">
+        <label>录制保存目录</label>
+        <input id="cfgRecordDir" placeholder="recordings">
+        <div class="switch"><input type="checkbox" id="cfgSound"> 开播时播放提示音</div>
+        <div class="switch"><input type="checkbox" id="cfgBrowser"> 开播时发送浏览器通知</div>
+        <div style="margin-top:12px;padding:10px 12px;background:var(--panel2);border-radius:8px;border:1px solid var(--line)">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">🔔 通知事件（配置后生效于 Telegram/邮件/Webhook）</div>
+          <div class="switch"><input type="checkbox" id="cfgNotifyLiveStart"> 开播通知</div>
+          <div class="switch"><input type="checkbox" id="cfgNotifyLiveEnd"> 下播通知</div>
+          <div class="switch"><input type="checkbox" id="cfgNotifyFudai"> 福袋通知</div>
+          <div class="hint" style="margin-top:6px">已配置的第三方通知通道收到对应事件时推送通知</div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <button class="btn primary" style="flex:1" onclick="saveSettingsBase()">💾 保存</button>
+        </div>
+      </div>
+
+      <!-- Tab: 福袋关键参数 -->
+      <div class="tabpage" id="tabSetFudai">
+        <div class="hint" style="margin-bottom:12px;padding:10px 12px;background:var(--panel2);border-radius:8px;border:1px solid var(--line);font-size:11px;line-height:1.7">
+          <div style="font-weight:600;color:var(--txt);margin-bottom:6px">📋 获取参数指南</div>
+          <div>1. 打开一个抖音直播间（如 <code>live.douyin.com</code> 任意主播）</div>
+          <div>2. 按 <code>F12</code> → Console 面板</div>
+          <div>3. 点击「一键获取参数」→ 复制代码 → 切回直播间 → <code>Ctrl+V</code></div>
+          <div>4. <b style="color:#f87171">如被拦截</b> → 输入 <code>allow pasting</code> → 回车 → 再 <code>Ctrl+V</code> → 回车</div>
+          <div>5. Console 输出 JSON → 复制到下方「📥 粘贴参数」→ 填入参数</div>
+        </div>
+        <label>msToken <span style="color:var(--dim);font-weight:400;font-size:11px">（可选）</span></label>
+        <input id="cfgFudaiMsToken" placeholder="从浏览器 Console 获取">
+        <label>a_bogus <span style="color:var(--dim);font-weight:400;font-size:11px">（可选）</span></label>
+        <input id="cfgFudaiABogus" placeholder="从浏览器 Console 获取">
+        <label>Cookie <span style="color:#f87171;font-weight:400;font-size:11px">（必填）</span></label>
+        <textarea id="cfgFudaiCookie" rows="4" placeholder="从浏览器 Console 获取完整 Cookie"></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">
+          <button class="btn sm ghost" onclick="revealCookie('cfgFudaiCookie','fudai_cookie')">👁 显示/编辑</button>
+          <button class="btn sm" onclick="openFudaiExtract()">📋 一键获取参数</button>
+          <span id="cfgFudaiCookieHint" style="font-size:10px;color:var(--dim)"></span>
+        </div>
+        <div style="margin-top:10px;padding:10px 12px;background:var(--panel2);border-radius:8px;border:1px solid var(--line)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="font-size:13px;font-weight:600">📥 粘贴参数（Console 输出的 JSON）</span>
+            <button class="btn sm ghost" onclick="document.getElementById('cfgFudaiPaste').value='';$('cfgFudaiMsToken').value='';$('cfgFudaiABogus').value='';$('cfgFudaiCookie').value='';" style="font-size:10px">清空</button>
+          </div>
+          <textarea id="cfgFudaiPaste" rows="3" placeholder='粘贴 Console 输出的 JSON，例如：{"cookie":"...","msToken":"...","a_bogus":"..."}'></textarea>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button class="btn sm primary" onclick="pasteFudaiParams()" style="flex:1">📌 填入参数</button>
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:10px">
+          <button class="btn primary" style="flex:1" onclick="saveSettingsFudai()">💾 保存</button>
+        </div>
+      </div>
+
+      <!-- Tab: 直播广场搜索参数 -->
+      <div class="tabpage" id="tabSetSquare">
+        <div class="hint" style="margin-bottom:12px;padding:10px 12px;background:var(--panel2);border-radius:8px;border:1px solid var(--line);font-size:11px;line-height:1.7">
+          <div style="font-weight:600;color:var(--txt);margin-bottom:6px">📋 获取直播搜索参数指南</div>
+          <div>1. 打开 <code>www.douyin.com</code> → 搜索任意关键词 → 点「直播」筛选</div>
+          <div>2. 按 <code>F12</code> → Network 面板 → 过滤 <code>live/search</code></div>
+          <div>3. 点击那个请求 → 在 Payload 里找到 <code>a_bogus</code> 和 <code>msToken</code></div>
+          <div>4. 复制到下方输入框（Cookie 可选，从请求 Headers 复制）</div>
+          <div>5. <b style="color:#f87171">注意：</b>福袋的 a_bogus 不能用于直播搜索，必须从搜索请求抓取</div>
+        </div>
+        <label>msToken</label>
+        <input id="cfgSquareMsToken" placeholder="从 live/search 请求的 Payload 复制">
+        <label>a_bogus</label>
+        <input id="cfgSquareABogus" placeholder="从 live/search 请求的 Payload 复制">
+        <label>Cookie（可选，从请求 Headers 复制）</label>
+        <textarea id="cfgSquareCookie" rows="3" placeholder="ttwid=...; __ac_signature=..."></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
+          <button class="btn sm ghost" onclick="revealCookie('cfgSquareCookie','square_cookie')">👁 显示/编辑</button>
+          <span id="cfgSquareCookieHint" style="font-size:10px;color:var(--dim)"></span>
+        </div>
+        <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
+          <div style="font-weight:600;color:var(--txt);margin-bottom:6px">🎬 推荐直播 URL（完整 URL，从浏览器复制）</div>
+          <div class="hint" style="margin-bottom:8px;padding:8px 10px;background:var(--panel2);border-radius:8px;border:1px solid var(--line);font-size:11px;line-height:1.7">
+            <div>1. 打开 <code>live.douyin.com</code>（直播首页）</div>
+            <div>2. 按 <code>F12</code> → Network 面板 → 过滤 <code>feed</code></div>
+            <div>3. 找到 <code>webcast/feed</code> 请求 → 右键 → <b>复制为 cURL</b></div>
+            <div>4. 从 cURL 中提取完整 URL（含 <code>a_bogus</code> 和 <code>msToken</code>）粘贴到下方</div>
+            <div style="color:#f87171;margin-top:4px">⚠️ 该 URL 有时效性，a_bogus 失效后需重新获取</div>
+          </div>
+          <input id="cfgSquareFeedUrl" placeholder="https://live.douyin.com/webcast/feed/?aid=6383&…&a_bogus=…">
+        </div>
+        <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
+          <div style="font-weight:600;color:var(--txt);margin-bottom:6px">🔍 直播搜索 URL（完整 URL，从浏览器复制）</div>
+          <div class="hint" style="margin-bottom:8px;padding:8px 10px;background:var(--panel2);border-radius:8px;border:1px solid var(--line);font-size:11px;line-height:1.7">
+            <div>1. 打开 <code>www.douyin.com</code> → 搜索任意关键词 → 点「直播」筛选</div>
+            <div>2. 按 <code>F12</code> → Network 面板 → 过滤 <code>live/search</code></div>
+            <div>3. 找到 <code>live/search</code> 请求 → 右键 → <b>复制为 cURL</b></div>
+            <div>4. 从 cURL 中提取完整 URL（含 <code>a_bogus</code> 和 <code>msToken</code>）粘贴到下方</div>
+            <div style="color:#f87171;margin-top:4px">⚠️ 填写后直播搜索直接使用该 URL（自动替换关键词），无需再单独填 msToken/a_bogus</div>
+          </div>
+          <input id="cfgSquareSearchUrl" placeholder="https://www.douyin.com/aweme/v1/web/live/search/?aid=6383&…&a_bogus=…">
+        </div>
+        <div style="margin-top:12px;display:flex;gap:10px">
+          <button class="btn primary" style="flex:1" onclick="saveSettingsSquare()">💾 保存</button>
+        </div>
+      </div>
+
+      <!-- Tab: 通知 -->
+      <div class="tabpage" id="tabSetNotify">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--panel2);border-radius:10px;border:1px solid var(--line);margin-bottom:12px">
+          <span style="font-size:20px">🔔</span>
+          <div style="flex:1">
+            <div style="font-size:13px">第三方通知（Telegram / 邮件 / Webhook）</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:2px">检测到开播/下播时推送至多个通道</div>
+          </div>
+          <button class="btn" onclick="closeModal('settingsMask');openNotifyCenter()">打开通知中心 →</button>
+        </div>
+        <div class="hint">通知中心支持 Telegram Bot、邮件 SMTP、Webhook 等</div>
+      </div>
+
+       <!-- Tab: 存储管理 -->
+      <div class="tabpage" id="tabSetStorage">
+        <div id="storageStatus" style="padding:12px 14px;background:var(--panel2);border-radius:10px;border:1px solid var(--line);margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">📊 数据库状态</div>
+          <div id="storageStatusLoading" style="font-size:12px;color:var(--dim);text-align:center;padding:20px">加载中...</div>
+          <div id="storageStatusContent" style="display:none">
+            <div style="padding:12px;background:var(--bg);border:1px solid var(--line);border-radius:8px">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+                <span id="storageMongoDot" style="width:8px;height:8px;border-radius:50%;background:var(--green)"></span>
+                <span style="font-size:12px;color:var(--dim)">MongoDB</span>
+                <span id="storageMongoActive" style="margin-left:auto;font-size:10px;padding:2px 8px;border-radius:10px;background:#0d3320;color:#22c55e">● 使用中</span>
+              </div>
+              <div style="font-size:11px;color:var(--dim)" id="storageMongoInfo">-</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:14px 14px;background:var(--panel2);border-radius:10px;border:1px solid var(--line);margin-bottom:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <span style="font-size:13px;font-weight:600">🔌 存储后端</span>
+            <span id="storageBackendBadge" style="font-size:11px;padding:2px 8px;border-radius:10px;background:#3b82f622;color:#3b82f6">● MongoDB</span>
+          </div>
+          <div style="padding:14px;border:2px solid var(--accent);border-radius:10px;background:#3b82f611">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+              <span style="font-size:18px">🍃</span>
+              <span style="font-size:13px;font-weight:600">MongoDB</span>
+            </div>
+            <div style="font-size:11px;color:var(--dim);line-height:1.5">文档数据库，所有数据存于 MongoDB</div>
+            <div style="font-size:10px;color:var(--dim);margin-top:4px" id="storageMongoAddr">-</div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button class="btn sm" onclick="testStorageConnection()" id="btnStorageTest">🔍 测试连接</button>
+          </div>
+          <div class="hint" id="cfgStorageHint" style="margin-top:8px;display:none"></div>
+        </div>
+      </div>
+
+      <!-- Tab: 数据库管理 -->
+       <div class="tabpage" id="tabSetDb">
+        <div style="padding:12px 14px;background:var(--panel2);border-radius:10px;border:1px solid var(--line);margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">🗄 数据库表概览</div>
+          <div id="dbStatusLoading" style="font-size:12px;color:var(--dim);text-align:center;padding:20px">加载中...</div>
+          <div id="dbStatusContent" style="display:none">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead>
+                <tr style="border-bottom:1px solid var(--line)">
+                  <th style="text-align:left;padding:6px 4px;color:var(--dim)" id="dbThTable">表名</th>
+                  <th style="text-align:right;padding:6px 4px;color:var(--dim)" id="dbThCount">记录数</th>
+                  <th style="text-align:left;padding:6px 4px;color:var(--dim)" id="dbThDesc">说明</th>
+                </tr>
+              </thead>
+              <tbody id="dbTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div style="padding:10px 12px;background:var(--panel2);border-radius:8px;border:1px solid var(--line)">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">📋 通知记录（最近20条）</div>
+          <div id="notifyLogListDb" style="max-height:300px;overflow-y:auto;font-size:12px"></div>
+        </div>
+        <div style="margin-top:10px;padding:10px 12px;background:var(--panel2);border-radius:8px;border:1px solid var(--line)">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">🎁 福袋历史（最近20条）</div>
+          <div id="fudaiHistList" style="max-height:300px;overflow-y:auto;font-size:12px"></div>
+        </div>
+      </div>
+
+      <div class="tabpage" id="tabSetData">
+        <label style="font-weight:600;color:var(--txt)">📁 数据管理</label>
+        <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
+          <button class="btn" onclick="exportList()">⬇ 导出监控列表</button>
+          <button class="btn" onclick="document.getElementById('importFile2').click()">⬆ 导入监控列表</button>
+          <input type="file" id="importFile2" accept=".json" style="display:none" onchange="importList(event)">
+        </div>
+        <div class="hint" style="margin-top:6px">导出的JSON文件可备份或迁移到其他设备导入</div>
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <button class="btn" style="flex:1" onclick="saveSettingsBackup()">📤 导出备份</button>
+        </div>
+      </div>
+
+          </div>
+  </div>
+</div>
+
+<!-- 通知中心弹窗 -->
+<div class="modal-mask" id="notifyMask">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-head">
+      <h3>🔔 通知中心</h3>
+      <span style="font-size:11px;color:var(--dim)" id="notifySummary"></span>
+      <button class="btn sm ghost" onclick="closeModal('notifyMask')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="tabs">
+        <div class="tab active" onclick="tab(this,'tabTg')">📱 Telegram</div>
+        <div class="tab" onclick="tab(this,'tabEmail')">📧 邮件</div>
+        <div class="tab" onclick="tab(this,'tabWebhook')">🔗 Webhook</div>
+        <div class="tab" onclick="tab(this,'tabNotifyLog')">📋 日志</div>
+      </div>
+
+      <!-- Telegram Tab -->
+      <div class="tabpage active" id="tabTg">
+        <div class="nccard">
+          <div class="nchead">
+            <h4>📱 Telegram Bot 通知</h4>
+            <span class="ncstatus" id="ncTgStatus">未配置</span>
+          </div>
+          <label class="nctoggle">
+            <input type="checkbox" id="ncTgOn" onchange="updateNcStatus()">
+            启用 Telegram 通知
+          </label>
+          <label>Bot Token（只显示 ●●●●●●，不可查看，如需修改请重新填入）</label>
+          <input id="ncTgToken" placeholder="123456:ABC-DEF...">
+          <label>Chat ID（逗号分隔，群组用负数）</label>
+          <div style="display:flex;gap:6px">
+            <input id="ncTgChats" placeholder="-100xxxxxxxxxx,12345678" style="flex:1">
+            <button class="btn sm" onclick="ncShowRaw('ncTgChats')">👁</button>
+          </div>
+          <label>
+            Telegram 专用代理（可选）
+            <button class="btn sm" style="float:right;margin-top:4px" onclick="toggleNcTgProxyHint()">💡</button>
+          </label>
+          <input id="ncTgProxy" placeholder="http://127.0.0.1:7890（留空则使用全局代理）">
+          <div class="nctip" id="ncTgProxyHint" style="display:none">
+            💡 Telegram 专用代理仅作用于 Telegram 通知推送，不影响主程序访问抖音接口和全局 HTTP 请求。适合 Telegram 需要单独过墙的场景。
+          </div>
+          <div class="nctip">
+            💡 在 Telegram 中找 <code>@BotFather</code> 创建 Bot 获取 Token，然后给 Bot 发一条消息后访问 <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> 找到你的 <code>chat_id</code>。
+          </div>
+          <div class="nctestbtn" style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn" onclick="ncTest('tg','live_start')">🔴 测试开播</button>
+            <button class="btn" onclick="ncTest('tg','live_end')">⚪ 测试下播</button>
+            <button class="btn primary" onclick="ncSave('all')">保存</button>
+          </div>
+          <div id="ncTgResult" class="nctip" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- Email Tab -->
+      <div class="tabpage" id="tabEmail">
+        <div class="nccard">
+          <div class="nchead">
+            <h4>📧 邮件通知</h4>
+            <span class="ncstatus" id="ncEmailStatus">未配置</span>
+          </div>
+          <label class="nctoggle">
+            <input type="checkbox" id="ncEmailOn" onchange="updateNcStatus()">
+            启用邮件通知
+          </label>
+          <div class="ncrow">
+            <div>
+              <label>SMTP 服务器</label>
+              <div id="ncEmailSmtpWrap" style="position:relative">
+                <select id="ncEmailSmtp" onchange="fillSmtpDefaults()">
+                  <option value="smtp.gmail.com">Gmail</option>
+                  <option value="smtp.qq.com">QQ 邮箱</option>
+                  <option value="smtp.163.com">163 网易</option>
+                  <option value="smtp.126.com">126 网易</option>
+                  <option value="smtp.exmail.qq.com">腾讯企业邮箱</option>
+                  <option value="smtp.office365.com">Outlook / Hotmail</option>
+                  <option value="smtp.sina.com.cn">新浪</option>
+                  <option value="smtp.sohu.com">搜狐</option>
+                  <option value="__custom__">手动输入</option>
+                </select>
+                <input id="ncEmailSmtpCustom" type="text" placeholder="手动输入 SMTP 地址" style="display:none;position:absolute;top:0;left:0;right:0">
+              </div>
+            </div>
+            <div style="flex:0.6"><label>端口</label><input id="ncEmailPort" type="number" placeholder="465"></div>
+          </div>
+          <label>账号</label>
+          <input id="ncEmailUser" placeholder="xxx@gmail.com">
+          <label>密码 / 授权码</label>
+          <input id="ncEmailPass" type="password" placeholder="应用专用密码">
+          <div class="ncrow">
+            <div><label>发件人</label><input id="ncEmailFrom" placeholder="xxx@gmail.com"></div>
+            <div><label>收件人（逗号分隔）</label><input id="ncEmailTo" placeholder="a@x.com, b@y.com"></div>
+          </div>
+          <label>主题前缀</label>
+          <input id="ncEmailPrefix" placeholder="抖音直播">
+          <label>主题模板（可选，留空使用主题前缀）</label>
+          <input id="ncEmailSubj" placeholder="[{prefix}] {nickname} {action}">
+          <div class="nctip">
+            占位符：<code>{prefix}</code> 主题前缀 <code>{nickname}</code> 主播名 <code>{title}</code> 标题 <code>{action}</code> 开播/下播
+          </div>
+          <label>邮件正文模板（可选，留空使用默认样式）</label>
+          <textarea id="ncEmailBody" rows="3" placeholder="留空使用默认精美 HTML 模板"></textarea>
+          <div class="nctip">
+            💡 常见配置：Gmail 用 <code>smtp.gmail.com:465</code>（端口 465，密码用应用专用密码）；QQ 邮箱 <code>smtp.qq.com:465</code>（同样需要授权码）。<br>
+            正文模板支持占位符：<code>{nickname}</code> <code>{title}</code> <code>{user_count}</code> <code>{like_count}</code> <code>{label}</code> <code>{action}</code> <code>{cover}</code> <code>{link}</code> 等
+          </div>
+          <div class="nctestbtn" style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn" onclick="ncTest('email','live_start')">🔴 测试开播</button>
+            <button class="btn" onclick="ncTest('email','live_end')">⚪ 测试下播</button>
+            <button class="btn primary" onclick="ncSave('all')">保存</button>
+          </div>
+          <div id="ncEmailResult" class="nctip" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- Webhook Tab -->
+      <div class="tabpage" id="tabWebhook">
+        <div class="nccard">
+          <div class="nchead">
+            <h4>🔗 Webhook</h4>
+            <span class="ncstatus" id="ncWhStatus">未配置</span>
+          </div>
+          <label>Webhook URL（POST JSON）</label>
+          <textarea id="ncWhUrl" rows="2" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."></textarea>
+          <div class="nctip">
+            💡 支持企业微信机器人、钉钉、飞书、推送宝、Bark 等任何接收 POST JSON 的服务。<br>
+            收到格式：<code>{"event":"live_start","streamer":{...},"room":{...},"text":"...","ts":123}</code>
+          </div>
+          <div class="nctestbtn" style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn" onclick="ncTest('webhook','live_start')">🔴 测试开播</button>
+            <button class="btn" onclick="ncTest('webhook','live_end')">⚪ 测试下播</button>
+            <button class="btn primary" onclick="ncSave('all')">保存</button>
+          </div>
+          <div id="ncWhResult" class="nctip" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- 日志 Tab -->
+      <div class="tabpage" id="tabNotifyLog">
+        <div class="nccard" style="padding:10px 14px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <h4 style="font-size:14px">📋 通知日志</h4>
+            <button class="btn sm" onclick="loadNotifyLog()">🔄 刷新</button>
+            <span class="spacer" style="flex:1"></span>
+            <span style="font-size:11px;color:var(--dim)" id="notifyLogCount"></span>
+          </div>
+          <div id="notifyLogList" style="max-height:420px;overflow-y:auto">
+            <div class="hint">暂无通知记录</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:18px;display:flex;gap:10px">
+        <button class="btn primary" style="flex:1" onclick="ncSave('all')">保存全部设置</button>
+        <button class="btn" onclick="closeModal('notifyMask')">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 备份中心弹窗 -->
+<div class="modal-mask" id="backupMask">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-head">
+      <h3>📦 备份 / 回档</h3>
+      <span style="font-size:11px;color:var(--dim)" id="backupSummary"></span>
+      <button class="btn sm ghost" onclick="closeModal('backupMask')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="tabs">
+        <div class="tab active" onclick="tab(this,'tabBackupList')">📋 备份列表</div>
+        <div class="tab" onclick="tab(this,'tabBackupCreate')">➕ 创建备份</div>
+      </div>
+
+      <!-- 备份列表 Tab -->
+      <div class="tabpage active" id="tabBackupList">
+        <div class="nccard" style="padding:10px 14px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <span style="font-size:13px;font-weight:600">📋 备份列表</span>
+            <button class="btn sm" onclick="loadBackupList()">🔄 刷新</button>
+            <button class="btn sm danger" onclick="deleteAllBackups()">🗑 全部删除</button>
+            <span class="spacer" style="flex:1"></span>
+            <span style="font-size:11px;color:var(--dim)" id="backupCount"></span>
+          </div>
+          <div id="backupListArea" style="max-height:400px;overflow-y:auto">
+            <div class="hint">暂无备份</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 创建备份 Tab -->
+      <div class="tabpage" id="tabBackupCreate">
+        <div class="nccard">
+          <div class="nchead">
+            <h4>➕ 创建新备份</h4>
+          </div>
+          <label>备份标签（可选）</label>
+          <input id="bkpTag" placeholder="如: v1.0 / 发布前 / 修复bug前">
+          <div class="nctip">
+            💡 备份会排除 __pycache__/recordings/db/配置文件 等，仅备份项目源码文件。<br>
+            回档时不会覆盖 douyin_history.db / 配置文件 / 录制文件，保障数据安全。
+          </div>
+          <div class="nctestbtn" style="display:flex;gap:8px;margin-top:14px">
+            <button class="btn primary" onclick="createBackup()">📦 创建备份</button>
+            <button class="btn" onclick="closeModal('backupMask')">关闭</button>
+          </div>
+          <div id="bkpResult" class="nctip" style="display:none"></div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;display:flex;gap:10px">
+        <button class="btn" onclick="closeModal('backupMask')">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let _adminRecords = {};
+let AUTH_TOKEN = localStorage.getItem('authToken') || '';
+let AUTH_USER = null;
+let currentTable = '';
+let currentPage = 0;
+let tableData = {};
+let editState = {};
+let confirmCallback = null;
+let PAGE_SIZE = 10;
+let loginModalShown = false;
+let currentBackend = 'current';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const TIMESTAMP_COLS = new Set(['ts','created_at','updated_at','started_at','ended_at','login_at',
+  'start_time','end_time','create_time','first_seen_live','draw_time']);
+function fmtTs(v) {
+  if (v == null || v === '') return '-';
+  let n = parseInt(v);
+  if (isNaN(n) || n <= 0) return String(v);
+  if (n < 1e12) { // seconds
+    const d = new Date(n * 1000);
+    const pad = x => String(x).padStart(2, '0');
+    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
+      + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  } else { // milliseconds
+    const d = new Date(n);
+    const pad = x => String(x).padStart(2, '0');
+    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
+      + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+}
+
+function toast(title, msg, type) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type || '');
+  el.innerHTML = '<b>' + esc(title) + '</b><span>' + esc(msg || '') + '</span>';
+  $('toasts').appendChild(el);
+  setTimeout(() => { el.style.opacity = 0; setTimeout(() => el.remove(), 300); }, 4000);
+}
+
+async function api(url, opts) {
+  if (typeof url === 'string' && url.startsWith('/api/') && AUTH_TOKEN) {
+    opts = Object.assign({}, opts, {headers: Object.assign({}, opts && opts.headers || {}, {'Authorization': 'Bearer ' + AUTH_TOKEN})});
+  }
+  const r = await fetch(url, opts);
+  const t = await r.text();
+  let data;
+  try { data = JSON.parse(t); } catch { return {raw: t}; }
+  if (data && data.code === 'unauthorized' && !url.includes('/account/login') && !url.includes('/account/setup')) {
+    if (!api.lastAuthPrompt || (Date.now() - api.lastAuthPrompt) > 5000) {
+      api.lastAuthPrompt = Date.now();
+      toast('需要登录', '请先登录再操作', 'warn');
+      if (!loginModalShown) openLoginModal();
+    }
+  }
+  return data;
+}
+
+async function checkAuth() {
+  try {
+    const r = await api('/api/account/status');
+    if (r.logged_in && r.user) {
+      AUTH_USER = r.user;
+      document.body.classList.remove('locked');
+      updateAuthUI(true, r.user);
+      switchDB(currentBackend);
+      loadDashboard();
+    } else {
+      AUTH_USER = null;
+      document.body.classList.add('locked');
+      updateAuthUI(false, null);
+      if (r.has_accounts) openLoginModal();
+    }
+  } catch (e) {
+    toast('连接失败', '无法连接服务端', 'warn');
+  }
+}
+
+function updateAuthUI(loggedIn, user) {
+  const status = $('authStatus');
+  if (loggedIn && user) {
+    status.innerHTML = '<span style="font-size:12px">👤 ' + esc(user.username) + ' (' + esc(user.role) + ')</span> '
+      + '<button class="btn sm ghost" onclick="doLogout()" style="margin-left:8px;padding:2px 8px">退出</button>';
+  } else {
+    status.innerHTML = '<span style="color:var(--dim);font-size:12px">未登录</span> '
+      + '<button class="btn sm" onclick="openLoginModal()" style="margin-left:8px;padding:2px 8px;font-size:11px">登录</button>';
+  }
+}
+
+function openLoginModal() {
+  loginModalShown = true;
+  $('loginError').textContent = '';
+  $('loginForm').reset();
+  $('loginMask').classList.add('show');
+  setTimeout(() => $('loginUsername').focus(), 100);
+}
+
+async function doLogin() {
+  const username = $('loginUsername').value.trim();
+  const password = $('loginPassword').value;
+  if (!username || !password) { $('loginError').textContent = '请输入用户名和密码'; return; }
+  $('loginError').textContent = '正在登录...';
+  $('loginSubmitBtn').disabled = true;
+  try {
+    const r = await api('/api/account/login', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username, password})
+    });
+    if (r.ok && r.token) {
+      AUTH_TOKEN = r.token; AUTH_USER = r.user;
+      document.body.classList.remove('locked');
+      localStorage.setItem('authToken', r.token);
+      closeModal('loginMask');
+      updateAuthUI(true, r.user);
+      toast('登录成功', '欢迎回来，' + esc(r.user.username), 'ok');
+      switchDB(currentBackend);
+      loadDashboard();
+    } else {
+      $('loginError').textContent = r.msg || '登录失败';
+    }
+  } catch (e) {
+    $('loginError').textContent = '请求失败: ' + e.message;
+  } finally {
+    $('loginSubmitBtn').disabled = false;
+  }
+}
+
+async function doLogout() {
+  await api('/api/account/logout', {method:'POST'});
+  AUTH_TOKEN = ''; AUTH_USER = null;
+  localStorage.removeItem('authToken');
+  updateAuthUI(false, null);
+  toast('已退出', '', 'ok');
+  checkAuth();
+}
+
+function closeModal(id) {
+  if (id === 'loginMask') {
+    // 未登录时不关闭，跳转首页
+    if (!AUTH_USER) {
+      location.href = '/';
+      return;
+    }
+    loginModalShown = false;
+  }
+  $('' + id).classList.remove('show');
+}
+
+// 侧边栏收起/展开（状态记忆在 localStorage）
+function setSidebarCollapsed(collapsed) {
+  document.querySelector('.layout').classList.toggle('collapsed', collapsed);
+  const btn = document.querySelector('.sidebar-collapse');
+  if (btn) {
+    btn.innerHTML = collapsed ? '▶' : '◀';
+    btn.title = collapsed ? '展开侧边栏' : '收起侧边栏';
+  }
+}
+function toggleSidebar() {
+  const layout = document.querySelector('.layout');
+  const collapsed = !layout.classList.contains('collapsed');
+  setSidebarCollapsed(collapsed);
+  try { localStorage.setItem('adminSidebarCollapsed', collapsed ? '1' : '0'); } catch (e) {}
+}
+(function initSidebar() {
+  try {
+    setSidebarCollapsed(localStorage.getItem('adminSidebarCollapsed') === '1');
+  } catch (e) {}
+})();
+
+function showConfirm(title, msg, cb) {
+  $('confirmTitle').textContent = title;
+  $('confirmMsg').innerHTML = msg;
+  confirmCallback = cb;
+  $('confirmMask').classList.add('show');
+  const okBtn = $('confirmOk');
+  const newOk = okBtn.cloneNode(true);
+  okBtn.parentNode.replaceChild(newOk, okBtn);
+  newOk.addEventListener('click', function(e) {
+    e.stopPropagation();
+    const cb = confirmCallback;
+    closeModal('confirmMask');
+    if (typeof cb === 'function') { cb(); confirmCallback = null; }
+  });
+}
+
+// ================= 仪表板 =================
+let tablesInfo = [];
+
+const TABLE_ICONS = {
+  config: '⚙️', streamers: '📺', history: '🕘', recordings: '🎬', logs: '📜',
+  notify_logs: '🔔', fudai: '🎁', fudai_history: '🎁', accounts: '👤',
+};
+
+async function loadDashboard() {
+  try {
+    const [r, ov] = await Promise.all([
+      api('/api/admin/tables?backend=' + currentBackend),
+      api('/api/stats/overview').catch(() => null),
+    ]);
+    if (!r.ok || !r.tables) { toast('加载失败', r.msg, 'warn'); return; }
+    tablesInfo = r.tables;
+    renderSidebar(tablesInfo);
+    renderDashboard(tablesInfo, ov && ov.ok ? ov : {});
+  } catch (e) {
+    toast('连接失败', e.message, 'warn');
+  }
+}
+
+function renderSidebar(tablesInfo) {
+  $('sidebarList').innerHTML = tablesInfo.map(t =>
+    '<div class="sidebar-item" data-table="' + t.table + '" data-short="' + esc(shortName(t.desc)) + '" onclick="openTable(\'' + t.table + '\')">'
+    + '<span>' + (TABLE_ICONS[t.table] || '📊') + ' ' + esc(t.desc) + '</span><span class="cnt">' + t.current + '</span></div>'
+  ).join('');
+}
+
+// 取名称的首个非表情字符，用作收起态侧边栏的缩短标签
+function shortName(name) {
+  const chars = Array.from(String(name || ''));
+  return chars.find(c => /[\u4e00-\u9fa5A-Za-z0-9]/.test(c)) || (chars[0] || '');
+}
+
+// ---------- 格式化辅助 ----------
+function fmtSize(bytes) {
+  const n = Number(bytes) || 0;
+  if (n >= 1073741824) return (n / 1073741824).toFixed(2) + ' GB';
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+  if (n >= 1024) return (n / 1024).toFixed(1) + ' KB';
+  return n + ' B';
+}
+
+function fmtDur(sec) {
+  const s = Math.max(0, Math.floor(Number(sec) || 0));
+  if (s >= 3600) return Math.floor(s / 3600) + '时' + Math.floor((s % 3600) / 60) + '分';
+  if (s >= 60) return Math.floor(s / 60) + '分' + (s % 60) + '秒';
+  return s + '秒';
+}
+
+function renderDashboard(tablesInfo, ov) {
+  ov = ov || {};
+  const counts = ov.counts || {};
+  const st = ov.streamers || { total: 0, online: 0, offline: 0 };
+  const today = ov.today || { live_count: 0 };
+  const rec = ov.recordings || { count: 0, total_size: 0 };
+  const notifyList = ov.notify || [];
+  const notifyOk = notifyList.filter(n => n.status === 'success').reduce((a, n) => a + n.count, 0);
+  const notifyFail = notifyList.filter(n => n.status !== 'success').reduce((a, n) => a + n.count, 0);
+  const logs7dTotal = (ov.logs7d || []).reduce((a, d) => a + d.info + d.warn + d.error + d.other, 0);
+
+  // ---- 迷你统计卡 ----
+  const mini = [
+    { ico: '📺', v: st.total, l: '监控主播', sub: '在线 ' + st.online + ' · 离线 ' + st.offline, ok: st.online > 0 },
+    { ico: '🕘', v: today.live_count, l: '今日开播', sub: '累计 ' + (counts.history || 0) + ' 场' },
+    { ico: '🎬', v: rec.count, l: '录制文件', sub: fmtSize(rec.total_size) },
+    { ico: '🎁', v: counts.fudai || 0, l: '进行中福袋', sub: '累计 ' + (counts.fudai_history || 0) + ' 次' },
+    { ico: '🔔', v: notifyOk + notifyFail, l: '通知发送', sub: '成功 ' + notifyOk + (notifyFail ? ' · 失败 ' + notifyFail : '') },
+    { ico: '📜', v: counts.logs || 0, l: '系统日志', sub: '近7天 ' + logs7dTotal + ' 条' },
+    { ico: '👤', v: counts.accounts || 0, l: '账号', sub: 'MongoDB' },
+  ];
+  $('ovMiniStats').innerHTML = mini.map(m =>
+    '<div class="mini-card"><div class="ico">' + m.ico + '</div><div>'
+    + '<div class="v' + (m.ok ? ' ok' : '') + '">' + m.v + '</div>'
+    + '<div class="l">' + m.l + (m.sub ? ' · ' + esc(m.sub) : '') + '</div>'
+    + '</div></div>'
+  ).join('');
+
+  // ---- 图表 ----
+  renderLiveTrendChart(ov.live14d || []);
+  renderOnlineDonut(st);
+  renderTablesBars(tablesInfo);
+  renderLogsChart(ov.logs7d || []);
+
+  // ---- 数据表快捷卡 ----
+  $('dashGrid').innerHTML = tablesInfo.map(t =>
+    '<div class="dash-card" data-table="' + t.table + '" onclick="openTable(\'' + t.table + '\')">'
+    + '<div class="dc-head"><span class="dc-ico">' + (TABLE_ICONS[t.table] || '📊') + '</span>'
+    + '<div><h4>' + esc(t.desc) + '</h4><div class="desc">' + t.table + '</div></div></div>'
+    + '<div class="dc-count">' + t.current + '</div></div>'
+  ).join('');
+}
+
+// ---------- 图表：近 14 天开播趋势（面积图，纯 SVG） ----------
+function renderLiveTrendChart(data) {
+  const el = $('chartLiveTrend');
+  if (!el) return;
+  if (!data.length) { el.innerHTML = '<div class="chart-empty">暂无数据</div>'; return; }
+  const W = 640, H = 200, PL = 34, PR = 10, PT = 12, PB = 24;
+  const iw = W - PL - PR, ih = H - PT - PB;
+  const maxV = Math.max(1, ...data.map(d => d.count));
+  const x = i => PL + (data.length === 1 ? iw / 2 : i * iw / (data.length - 1));
+  const y = v => PT + ih - (v / maxV) * ih;
+
+  let g = '';
+  [0, 0.5, 1].forEach(f => {
+    const yy = (PT + ih - f * ih).toFixed(1);
+    g += '<line x1="' + PL + '" y1="' + yy + '" x2="' + (W - PR) + '" y2="' + yy + '" stroke="#ffffff10" stroke-width="1"/>';
+    g += '<text x="' + (PL - 6) + '" y="' + (Number(yy) + 3) + '" fill="#64748b" font-size="9" text-anchor="end">' + Math.round(maxV * f) + '</text>';
+  });
+  const pts = data.map((d, i) => x(i).toFixed(1) + ',' + y(d.count).toFixed(1));
+  const area = 'M' + pts[0].split(',')[0] + ',' + (PT + ih)
+    + ' L' + pts.join(' L')
+    + ' L' + (W - PR) + ',' + (PT + ih) + ' Z';
+  g += '<path d="' + area + '" fill="url(#gradLive)" opacity="0.30"/>';
+  g += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="#ff3b5c" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+  data.forEach((d, i) => {
+    g += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(d.count).toFixed(1) + '" r="3.2" fill="#ff3b5c">'
+      + '<title>' + d.day + '：开播 ' + d.count + ' 场 · 累计 ' + fmtDur(d.duration) + '</title></circle>';
+    if (i % 2 === 0 || data.length <= 8) {
+      g += '<text x="' + x(i).toFixed(1) + '" y="' + (H - 7) + '" fill="#64748b" font-size="9" text-anchor="middle">' + d.day.slice(5) + '</text>';
+    }
+  });
+  el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block">'
+    + '<defs><linearGradient id="gradLive" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#ff3b5c"/><stop offset="1" stop-color="#ff3b5c" stop-opacity="0"/>'
+    + '</linearGradient></defs>' + g + '</svg>';
+}
+
+// ---------- 图表：主播在线状态（环形图） ----------
+function renderOnlineDonut(st) {
+  const el = $('chartOnline');
+  if (!el) return;
+  const total = st.total || 0;
+  if (!total) { el.innerHTML = '<div class="chart-empty">暂无主播，去主页添加吧</div>'; return; }
+  const parts = [
+    { label: '直播中', value: st.online || 0, color: '#22c55e' },
+    { label: '离线', value: st.offline || 0, color: '#475569' },
+  ];
+  const R = 58, C = 2 * Math.PI * R;
+  let off = 0, segs = '';
+  for (const p of parts) {
+    if (!p.value) continue;
+    const frac = p.value / total;
+    segs += '<circle r="' + R + '" cx="80" cy="80" fill="none" stroke="' + p.color + '" stroke-width="17" '
+      + 'stroke-dasharray="' + (frac * C).toFixed(2) + ' ' + C.toFixed(2) + '" '
+      + 'stroke-dashoffset="' + (-off * C).toFixed(2) + '" transform="rotate(-90 80 80)">'
+      + '<title>' + p.label + '：' + p.value + ' 个</title></circle>';
+    off += frac;
+  }
+  el.innerHTML = '<div style="display:flex;align-items:center;gap:16px;justify-content:center;padding:6px 0">'
+    + '<svg viewBox="0 0 160 160" style="width:132px;height:132px;flex-shrink:0">' + segs
+    + '<text x="80" y="76" text-anchor="middle" fill="#e2e8f0" font-size="26" font-weight="700">' + total + '</text>'
+    + '<text x="80" y="95" text-anchor="middle" fill="#64748b" font-size="10">主播总数</text></svg>'
+    + '<div>' + parts.map(p =>
+      '<div style="font-size:12px;color:var(--dim);margin:5px 0;white-space:nowrap">'
+      + '<i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:' + p.color + ';margin-right:6px"></i>'
+      + p.label + ' <b style="color:var(--txt)">' + p.value + '</b></div>').join('')
+    + '</div></div>';
+}
+
+// ---------- 图表：数据表记录数（横向条形） ----------
+function renderTablesBars(tablesInfo) {
+  const el = $('chartTables');
+  if (!el) return;
+  const items = tablesInfo.map(t => ({ label: t.desc, sub: t.table, value: t.current || 0 }));
+  const max = Math.max(1, ...items.map(i => i.value));
+  el.innerHTML = items.map(it => {
+    const w = it.value ? Math.max(2, (it.value / max) * 100).toFixed(1) : 0;
+    return '<div style="display:flex;align-items:center;gap:8px;margin:6px 0" title="' + esc(it.sub) + '：' + it.value + ' 条">'
+      + '<div style="width:72px;font-size:11px;color:var(--dim);text-align:right;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(it.label) + '</div>'
+      + '<div style="flex:1;height:13px;background:var(--bg);border-radius:7px;overflow:hidden">'
+      + (it.value ? '<div style="width:' + w + '%;height:100%;background:linear-gradient(90deg,#6366f1,#a78bfa);border-radius:7px"></div>' : '')
+      + '</div>'
+      + '<div style="width:44px;font-size:12px;font-weight:600;text-align:right;color:' + (it.value ? 'var(--txt)' : 'var(--dim)') + '">' + it.value + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+// ---------- 图表：近 7 天日志（堆叠柱状，纯 SVG） ----------
+function renderLogsChart(data) {
+  const el = $('chartLogs');
+  if (!el) return;
+  if (!data.length || data.every(d => !d.info && !d.warn && !d.error && !d.other)) {
+    el.innerHTML = '<div class="chart-empty">近 7 天暂无日志</div>';
+    return;
+  }
+  const W = 320, H = 190, PL = 30, PR = 6, PT = 10, PB = 24;
+  const iw = W - PL - PR, ih = H - PT - PB;
+  const maxV = Math.max(1, ...data.map(d => d.info + d.warn + d.error + d.other));
+  const bw = Math.min(26, iw / data.length * 0.55);
+  const LEVELS = [
+    { key: 'info', color: '#6366f1', label: 'info' },
+    { key: 'warn', color: '#facc15', label: 'warn' },
+    { key: 'error', color: '#f87171', label: 'error' },
+    { key: 'other', color: '#475569', label: '其他' },
+  ];
+  let g = '';
+  [0, 0.5, 1].forEach(f => {
+    const yy = (PT + ih - f * ih).toFixed(1);
+    g += '<line x1="' + PL + '" y1="' + yy + '" x2="' + (W - PR) + '" y2="' + yy + '" stroke="#ffffff10" stroke-width="1"/>';
+    g += '<text x="' + (PL - 5) + '" y="' + (Number(yy) + 3) + '" fill="#64748b" font-size="9" text-anchor="end">' + Math.round(maxV * f) + '</text>';
+  });
+  data.forEach((d, i) => {
+    const cx = PL + iw / data.length * (i + 0.5);
+    const total = d.info + d.warn + d.error + d.other;
+    let yCur = PT + ih;
+    let segs = '';
+    for (const lv of LEVELS) {
+      const v = d[lv.key] || 0;
+      if (!v) continue;
+      const hh = (v / maxV) * ih;
+      yCur -= hh;
+      segs += '<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + yCur.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hh.toFixed(1) + '" fill="' + lv.color + '"/>';
+    }
+    g += '<g>' + segs
+      + '<rect x="' + (cx - iw / data.length / 2).toFixed(1) + '" y="' + PT + '" width="' + (iw / data.length).toFixed(1) + '" height="' + ih + '" fill="transparent">'
+      + '<title>' + d.day + '：共 ' + total + ' 条（info ' + d.info + ' / warn ' + d.warn + ' / error ' + d.error + '）</title></rect></g>';
+    if (i % 2 === 0 || data.length <= 4) {
+      g += '<text x="' + cx.toFixed(1) + '" y="' + (H - 7) + '" fill="#64748b" font-size="9" text-anchor="middle">' + d.day.slice(5) + '</text>';
+    }
+  });
+  const legend = '<div class="lgd">' + LEVELS.map(l => '<span><i style="background:' + l.color + '"></i>' + l.label + '</span>').join('') + '</div>';
+  el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block">' + g + '</svg>' + legend;
+}
+
+// ================= 数据库查看模式（固定 MongoDB） =================
+function switchDB() {
+  currentBackend = 'current';
+  $('dbStatus').textContent = 'MongoDB';
+}
+
+// ================= 表格查看 =================
+async function refreshStreamers() {
+  try {
+    const r = await api('/api/refresh');
+    if (r.ok) {
+      toast('刷新主播', r.msg || '刷新已开始', 'ok');
+      setTimeout(loadDashboard, 2500);
+    } else {
+      toast('刷新失败', r.msg || '无法触发刷新', 'warn');
+    }
+  } catch (e) {
+    toast('刷新失败', '请求异常', 'warn');
+  }
+}
+
+function backToDashboard() {
+  currentTable = '';
+  $('dashboardView').style.display = 'block';
+  $('tableView').style.display = 'none';
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+  loadDashboard();
+}
+
+async function openTable(tbl) {
+  currentTable = tbl;
+  currentPage = 0;
+  $('dashboardView').style.display = 'none';
+  $('tableView').style.display = 'flex';
+
+  const info = tablesInfo.find(t => t.table === tbl);
+  $('tableTitle').innerHTML = '📊 ' + esc(info ? info.desc : tbl);
+  $('searchInput').value = '';
+
+  document.querySelectorAll('.sidebar-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.table === tbl);
+  });
+
+  await refreshTable();
+}
+
+async function refreshTable() {
+  if (!currentTable) return;
+  const search = $('searchInput').value.trim();
+
+  $('tableLoading').style.display = 'block';
+  $('tableContent').style.display = 'none';
+
+  const r = await api('/api/admin/records?table=' + currentTable + '&limit=' + PAGE_SIZE + '&offset=' + (currentPage * PAGE_SIZE) + (search ? '&search=' + encodeURIComponent(search) : '') + '&backend=' + currentBackend);
+  if (!r.ok) { toast('加载失败', r.msg, 'warn'); $('tableLoading').textContent = '加载失败: ' + esc(r.msg); return; }
+
+  tableData = r;
+  renderTable();
+}
+
+function renderTable() {
+  $('tableLoading').style.display = 'none';
+  $('tableContent').style.display = 'flex';
+  $('tableInfo').textContent = '共 ' + tableData.total + ' 条记录';
+
+  const cols = tableData.cols || [];
+  const records = tableData.records || [];
+
+  if (records.length === 0) {
+    $('tableWrap').innerHTML = '<div class="empty"><div class="big">📭</div><div>暂无记录</div></div>';
+    $('pagination').innerHTML = '';
+    return;
+  }
+
+  let html = '<table><thead><tr>';
+  html += '<th style="width:40px">#</th>';
+  cols.forEach(c => { html += '<th>' + esc(c) + '</th>'; });
+  html += '<th style="width:110px">操作</th>';
+  html += '</tr></thead><tbody>';
+
+  records.forEach((rec, i) => {
+    const pk = rec.id || rec.key || rec.sec_uid || '';
+    html += '<tr>';
+    html += '<td style="color:var(--dim)">' + (currentPage * PAGE_SIZE + i + 1) + '</td>';
+    cols.forEach(c => {
+      let val = rec[c];
+      const isTs = TIMESTAMP_COLS.has(c);
+      if (isTs && val !== null && val !== undefined) {
+        val = fmtTs(val);
+      }
+      const isLong = val && typeof val === 'string' && val.length > 60;
+      if (isLong) {
+        const truncated = esc(val.substring(0, 60)) + '...';
+        const full = esc(val);
+        html += '<td class="val expandable" onclick="toggleCell(this)" title="点击查看完整内容">'
+          + '<span class="short-text">' + truncated + '</span>'
+          + '<span class="full-text" style="display:none">' + full + '</span></td>';
+      } else {
+        html += '<td class="val">' + (val === null || val === undefined ? '-' : esc(val)) + '</td>';
+      }
+    });
+    const recKey = 'rec_' + currentTable + '_' + currentPage + '_' + i;
+    _adminRecords[recKey] = {pk: pk, rec: rec};
+    html += '<td><div class="row-actions">'
+      + '<button class="btn sm" onclick="editRecordById(&#39;' + recKey + '&#39;)">✏️</button>'
+      + '<button class="btn sm danger" onclick="deleteRecordById(&#39;' + recKey + '&#39;)">🗑</button>'
+      + '</div></td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  $('tableWrap').innerHTML = html;
+
+  const totalPages = Math.max(1, Math.ceil(tableData.total / PAGE_SIZE));
+  let pagHtml = '';
+  pagHtml += '<button class="btn" ' + (currentPage === 0 ? 'disabled' : '') + ' onclick="goPage(0)">‹‹</button>';
+  pagHtml += '<button class="btn" ' + (currentPage === 0 ? 'disabled' : '') + ' onclick="goPage(' + (currentPage - 1) + ')">‹</button>';
+  pagHtml += '<span class="info">' + (currentPage + 1) + ' / ' + totalPages + ' · 每页 ' + PAGE_SIZE + ' 条</span>';
+  pagHtml += '<button class="btn" ' + (currentPage >= totalPages - 1 ? 'disabled' : '') + ' onclick="goPage(' + (currentPage + 1) + ')">›</button>';
+  pagHtml += '<button class="btn" ' + (currentPage >= totalPages - 1 ? 'disabled' : '') + ' onclick="goPage(' + (totalPages - 1) + ')">››</button>';
+  $('pagination').innerHTML = pagHtml;
+  $('tableWrap').scrollTop = 0;  // 翻页后回到本页第一条
+}
+
+function goPage(p) {
+  currentPage = p;
+  refreshTable();
+}
+
+// ================= 编辑 =================
+function editRecordById(key) {
+  const data = _adminRecords[key];
+  if (data) editRecord(data.pk, data.rec);
+}
+
+function editRecord(pk, rec) {
+  editState = {table: currentTable, primaryKey: pk, record: rec, changes: Object.assign({}, rec)};
+  $('editTitle').textContent = '✏️ 编辑 · ' + currentTable + '(' + esc(pk) + ')';
+  $('editError').textContent = '';
+  const cols = tableData.cols || [];
+  let html = '';
+  cols.forEach(c => {
+    const val = rec[c] !== null && rec[c] !== undefined ? (Array.isArray(rec[c]) ? JSON.stringify(rec[c]) : rec[c]) : '';
+    const isLong = (c === 'msg' || c === 'value' || c === 'note' || c === 'gift_image' || c === 'conditions' || c === 'file_path');
+    html += '<div class="edit-row"><div class="col-key">' + esc(c) + '</div><div class="col-val">'
+      + (isLong ? '<textarea rows="4" id="edit_' + c + '" onchange="onEditChange(\'' + c + '\')">' + esc(val) + '</textarea>'
+        : '<input id="edit_' + c + '" value="' + esc(val) + '" onchange="onEditChange(\'' + c + '\')">')
+      + '</div></div>';
+  });
+  $('editFields').innerHTML = html;
+  $('editMask').classList.add('show');
+}
+
+function onEditChange(key) {
+  const el = $('edit_' + key);
+  if (!el) return;
+  editState.changes[key] = el.value;
+}
+
+async function saveEdit() {
+  $('editSubmitBtn').disabled = true;
+  $('editError').textContent = '正在保存...';
+  try {
+    const r = await api('/api/admin/record/edit', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({table: editState.table, primary_key: editState.primaryKey, changes: editState.changes, backend: currentBackend})
+    });
+    if (r.ok) {
+      closeModal('editMask');
+      toast('保存成功', r.msg, 'ok');
+      refreshTable();
+      loadDashboard();
+    } else {
+      $('editError').textContent = r.msg || '保存失败';
+    }
+  } catch (e) {
+    $('editError').textContent = '请求失败: ' + e.message;
+  } finally {
+    $('editSubmitBtn').disabled = false;
+  }
+}
+
+// ================= 删除 =================
+function deleteRecordById(key) {
+  const data = _adminRecords[key];
+  if (data) deleteRecord(data.pk);
+}
+
+function deleteRecord(pk) {
+  showConfirm('🗑 删除确认', '确定要删除 ID=' + esc(pk) + ' 的记录吗？此操作不可撤销。', function() {
+    doDelete(pk);
+  });
+}
+
+async function doDelete(pk) {
+  const r = await api('/api/admin/record/delete', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({table: currentTable, primary_key: pk, backend: currentBackend})
+  });
+  if (r.ok) {
+    toast('删除成功', r.msg, 'ok');
+    refreshTable();
+    loadDashboard();
+  } else {
+    toast('删除失败', r.msg, 'warn');
+  }
+}
+
+// ================= 导出 =================
+async function exportTable() {
+  const r = await api('/api/admin/records?table=' + currentTable + '&limit=10000&backend=' + currentBackend);
+  if (!r.ok) { toast('导出失败', r.msg, 'warn'); return; }
+  const info = tablesInfo.find(t => t.table === currentTable);
+  const csvHeader = (r.cols || []).join(',') + '\n';
+  const csvRows = (r.records || []).map(rec => {
+    return (r.cols || []).map(c => {
+      let v = rec[c] !== null && rec[c] !== undefined ? (Array.isArray(rec[c]) ? JSON.stringify(rec[c]) : String(rec[c])) : '';
+      v = v.replace(/"/g, '""');
+      return '"' + v + '"';
+    }).join(',');
+  }).join('\n');
+  const blob = new Blob([csvHeader + csvRows], {type: 'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (info ? info.desc : currentTable) + '.csv';
+  a.click();
+  toast('导出完成', r.records.length + ' 条记录', 'ok');
+}
+
+// 展开/收起长字段
+function toggleCell(td) {
+  const short = td.querySelector('.short-text');
+  const full = td.querySelector('.full-text');
+  if (!short || !full) return;
+  if (full.style.display === 'none') {
+    short.style.display = 'none';
+    full.style.display = 'block';
+  } else {
+    short.style.display = 'inline';
+    full.style.display = 'none';
+  }
+}
+
+// ================= 设置 / 通知 / 备份（迁移自主页） =================
+let CONFIG = {};
+
+function fmtTime(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts*1000);
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getMonth()+1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function tab(el, id) {
+  el.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  el.parentElement.parentElement.querySelectorAll('.tabpage').forEach(p => p.classList.remove('active'));
+  $(id).classList.add('active');
+  if (id === 'tabNotifyLog') loadNotifyLog();
+  if (id === 'tabSetStorage') refreshStorageStatus();
+  if (id === 'tabSetDb') refreshDbStatus();
+}
+
+// ================= 设置（Tab 分栏，各栏独立保存） =================
+async function openSettings() {
+  const d = await api('/api/config');
+  CONFIG = d.config || {};
+  $('cfgInterval').value = CONFIG.interval ?? 60;
+  $('cfgCookie').value = CONFIG.cookie || '';
+  $('cfgRecordDir').value = CONFIG.record_dir || 'recordings';
+  $('cfgSound').checked = !!CONFIG.notify_sound;
+  $('cfgBrowser').checked = !!CONFIG.notify_browser;
+  $('cfgProxy').value = CONFIG.proxy || '';
+  const ev = strToNotifyEvents(CONFIG.notify_events || 'live_start,live_end,fudai_start');
+  $('cfgNotifyLiveStart').checked = ev.live_start;
+  $('cfgNotifyLiveEnd').checked = ev.live_end;
+  $('cfgNotifyFudai').checked = ev.fudai_start;
+  $('cfgFudaiMsToken').value = CONFIG.fudai_ms_token || '';
+  $('cfgFudaiABogus').value = CONFIG.fudai_a_bogus || '';
+  const _fc = CONFIG.fudai_cookie || '';
+  $('cfgFudaiCookie').value = _fc;
+  if (_fc.indexOf('●●●●●●') >= 0) {
+    $('cfgFudaiCookieHint').textContent = '已保存（脱敏显示，点击 👁 查看/修改）';
+  } else if (!_fc) {
+    $('cfgFudaiCookieHint').textContent = '未填写（必填，从浏览器 Network → lottery_info 复制）';
+  } else {
+    $('cfgFudaiCookieHint').textContent = '已保存';
+  }
+  $('cfgSquareMsToken').value = CONFIG.square_ms_token || '';
+  $('cfgSquareABogus').value = CONFIG.square_a_bogus || '';
+  $('cfgSquareFeedUrl').value = CONFIG.square_feed_url || '';
+  $('cfgSquareSearchUrl').value = CONFIG.square_search_url || '';
+  const _sc = CONFIG.square_cookie || '';
+  $('cfgSquareCookie').value = _sc;
+  $('cfgSquareCookieHint').textContent = _sc ? (_sc.indexOf('●●●●●●') >= 0 ? '已保存（脱敏）' : '已保存') : '未填写（可选）';
+  $('cfgCookieHint').textContent = '';
+  $('cfgFudaiCookieHint').textContent = '';
+  $('settingsMask').classList.add('show');
+}
+
+// 显示/编辑 Cookie：获取原始值填入文本框
+async function revealCookie(fieldId, configKey) {
+  const textarea = $(fieldId);
+  if (!textarea) return;
+  if (textarea.value && textarea.value.indexOf("●●●●●●") < 0) {
+    textarea.value = (CONFIG[configKey] || '') + "●●●●●●";
+    return;
+  }
+  try {
+    const r = await api('/api/config?raw=1');
+    const rawCfg = r.config || {};
+    const rawVal = rawCfg[configKey] || '';
+    if (!rawVal) {
+      textarea.value = '';
+      toast('无保存的 Cookie', '请先粘贴 Cookie 再保存', 'warn');
+      return;
+    }
+    textarea.value = rawVal;
+    textarea.setAttribute('placeholder', '原 Cookie 已显示，可直接修改');
+    const hintId = fieldId + 'Hint';
+    const hint = $(hintId);
+    if (hint) hint.textContent = '已显示完整 Cookie，可编辑后点击保存';
+  } catch (e) {
+    toast('获取 Cookie 失败', e.message, 'warn');
+  }
+}
+
+// 通知事件字符串 ↔ checkbox 状态 互转
+function strToNotifyEvents(s) {
+  const parts = (s || '').split(',').map(e => e.trim()).filter(Boolean);
+  return {
+    live_start: parts.includes('live_start'),
+    live_end: parts.includes('live_end'),
+    fudai_start: parts.includes('fudai_start'),
+  };
+}
+function notifyEventsToStr(obj) {
+  const arr = [];
+  if (obj.live_start) arr.push('live_start');
+  if (obj.live_end) arr.push('live_end');
+  if (obj.fudai_start) arr.push('fudai_start');
+  return arr.join(',');
+}
+
+// 基础设置保存
+async function saveSettingsBase() {
+  const body = {
+    interval: parseInt($('cfgInterval').value) || 60,
+    cookie: $('cfgCookie').value.trim(),
+    record_dir: $('cfgRecordDir').value.trim() || 'recordings',
+    notify_sound: $('cfgSound').checked,
+    notify_browser: $('cfgBrowser').checked,
+    proxy: $('cfgProxy').value.trim(),
+    notify_events: notifyEventsToStr({
+      live_start: $('cfgNotifyLiveStart').checked,
+      live_end: $('cfgNotifyLiveEnd').checked,
+      fudai_start: $('cfgNotifyFudai').checked,
+    }),
+  };
+  const r = await api('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (r.config) CONFIG = Object.assign(CONFIG, r.config);
+  toast('基础设置已保存', '刷新间隔 ' + (r.config ? r.config.interval : body.interval) + 's', 'ok');
+}
+
+// 福袋参数保存
+async function saveSettingsFudai() {
+  const fudaiCookie = $('cfgFudaiCookie').value.trim();
+  if (!fudaiCookie) {
+    toast('福袋 Cookie 不能为空', '请从浏览器 Console 提取完整 Cookie', 'warn');
+    return;
+  }
+  const body = {};
+  if (fudaiCookie.indexOf('●●●●●●') === -1) {
+    body.fudai_cookie = fudaiCookie;
+  }
+  const ms = $('cfgFudaiMsToken').value.trim();
+  const bg = $('cfgFudaiABogus').value.trim();
+  if (ms) body.fudai_ms_token = ms;
+  if (bg) body.fudai_a_bogus = bg;
+  const r = await api('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (r.config) CONFIG = Object.assign(CONFIG, r.config);
+  toast('福袋参数已保存', '下次检测将使用新参数', 'ok');
+}
+
+async function saveSettingsSquare() {
+  const body = {};
+  const sc = $('cfgSquareCookie').value.trim();
+  if (sc.indexOf('●●●●●●') === -1) body.square_cookie = sc;
+  const ms = $('cfgSquareMsToken').value.trim();
+  const bg = $('cfgSquareABogus').value.trim();
+  const fu = $('cfgSquareFeedUrl').value.trim();
+  const su = $('cfgSquareSearchUrl').value.trim();
+  if (ms) body.square_ms_token = ms;
+  if (bg) body.square_a_bogus = bg;
+  if (fu) body.square_feed_url = fu;
+  if (su) body.square_search_url = su;
+  const r = await api('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (r.config) CONFIG = Object.assign(CONFIG, r.config);
+  toast('广场参数已保存', '直播搜索/推荐直播将使用新参数', 'ok');
+}
+
+/* ================= 福袋参数一键提取 ================= */
+const FUDAIC_EXTRACT_JS = `(async()=>{const r={cookie:document.cookie};let ms='',ab='',src='';for(let i=0;i<10;i++){for(const e of performance.getEntriesByType('resource')){const u=e.name||'';let m;if(!ms&&(m=/msToken=([^&]+)/.exec(u))){ms=decodeURIComponent(m[1]);src='URL'}if(!ab&&(m=/a_bogus=([^&]+)/.exec(u))){ab=decodeURIComponent(m[1])}if(ms&&ab)break}if(ms&&ab)break;await new Promise(r=>setTimeout(r,300))}if(!ms){ms=(document.cookie.match(/msToken=([^;]+)/)||[])[1]||'';if(ms)src='Cookie'}if(!ms){ms=localStorage.getItem('msToken')||sessionStorage.getItem('msToken')||'';if(ms)src='Storage'}r.msToken=ms;r.a_bogus=ab;console.log('1/3 Cookie:',r.cookie.slice(0,80)+'...');console.log('2/3 msToken:',r.msToken||'（未获取到）',src||'(未找到)');console.log('3/3 a_bogus:',r.a_bogus||'（未获取到）');console.log('');console.log('===== 完整参数（复制此处）=====');console.log(JSON.stringify(r,null,2));console.log('=================================');console.log('粘贴到设置 → 福袋 → 粘贴参数');try{await navigator.clipboard.writeText(JSON.stringify(r,null,2));console.log('✅ 已复制到剪贴板')}catch(e){console.log('⚠️ 请手动 Ctrl+C 复制上方 JSON')}const c=(r.cookie||'').slice(0,50)+(r.cookie?.length>50?'…':'');alert('✅ 参数已提取\\nCookie: '+c+'\\nmsToken: '+(r.msToken||'无')+'\\na_bogus: '+(r.a_bogus||'无'))})()`;
+const FUDAIC_EXTRACT_JS_LONG = `
+(async () => {
+  const r = { cookie: document.cookie };
+  let ms = '', ab = '', src = '';
+  for (let i = 0; i < 10; i++) {
+    for (const e of performance.getEntriesByType('resource')) {
+      const u = e.name || '';
+      let m;
+      if (!ms && (m = /msToken=([^&]+)/.exec(u))) { ms = decodeURIComponent(m[1]); src = '资源URL'; }
+      if (!ab && (m = /a_bogus=([^&]+)/.exec(u))) { ab = decodeURIComponent(m[1]); }
+      if (ms && ab) break;
+    }
+    if (ms && ab) break;
+    await new Promise(r => setTimeout(r, 300));
+  }
+  if (!ms) { ms = (document.cookie.match(/msToken=([^;]+)/)||[])[1] || ''; if (ms) src = 'Cookie'; }
+  if (!ms) { ms = localStorage.getItem('msToken') || sessionStorage.getItem('msToken') || ''; if (ms) src = 'Storage'; }
+  r.msToken = ms;
+  r.a_bogus = ab;
+  console.log('1/3 Cookie:', r.cookie.slice(0, 80) + '...');
+  console.log('2/3 msToken:', r.msToken || '（未获取到）', src || '(未找到)');
+  console.log('3/3 a_bogus:', r.a_bogus || '（未获取到）');
+  console.log('');
+  console.log('===== 完整参数（复制此处）=====');
+  console.log(JSON.stringify(r, null, 2));
+  console.log('=================================');
+  console.log('粘贴到设置 → 福袋 → 粘贴参数');
+  try { await navigator.clipboard.writeText(JSON.stringify(r, null, 2)); console.log('✅ 已复制到剪贴板'); }
+  catch(e) { console.log('⚠️ 请手动 Ctrl+C 复制上方 JSON'); }
+  const c = (r.cookie || '').slice(0, 50) + (r.cookie?.length > 50 ? '…' : '');
+  alert('✅ 参数已提取\\nCookie: ' + c + '\\nmsToken: ' + (r.msToken || '无') + '\\na_bogus: ' + (r.a_bogus || '无'));
+})();
+`;
+
+function openFudaiExtract() {
+  $('fudaiExtractScript').textContent = FUDAIC_EXTRACT_JS_LONG;
+  $('fudaiExtractMask').classList.add('show');
+}
+
+async function copyFudaiScript() {
+  const text = FUDAIC_EXTRACT_JS;
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '-9999px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (ok) {
+      toast('代码已复制', '抖音直播间 → F12 → Ctrl+V → 如被拦截输入 allow pasting → Enter → Ctrl+V → Enter', 'ok');
+      return;
+    }
+  } catch {}
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('代码已复制', '抖音直播间 → F12 → Ctrl+V → 如被拦截输入 allow pasting → Enter → Ctrl+V → Enter', 'ok');
+      return;
+    } catch {}
+  }
+  const pre = $('fudaiExtractScript');
+  const range = document.createRange();
+  range.selectNodeContents(pre);
+  window.getSelection().removeAllRanges();
+  window.getSelection().addRange(range);
+  toast('请手动 Ctrl+C 复制', '代码已选中', 'warn');
+}
+
+function pasteFudaiParams() {
+  const raw = $('cfgFudaiPaste').value.trim();
+  if (!raw) { toast('无内容', '请先从 Console 获取参数', 'warn'); return; }
+  try {
+    const d = JSON.parse(raw);
+    let count = 0;
+    if (d.cookie) { $('cfgFudaiCookie').value = d.cookie; count++; }
+    if (d.msToken) { $('cfgFudaiMsToken').value = d.msToken; count++; }
+    if (d.a_bogus) { $('cfgFudaiABogus').value = d.a_bogus; count++; }
+    if (count === 0) { toast('无有效字段', '期望包含 cookie / msToken / a_bogus', 'warn'); return; }
+    toast('参数已填入', '共填入 ' + count + ' 个字段，点击保存即可', 'ok');
+  } catch(e) {
+    toast('JSON 解析失败', e.message, 'warn');
+  }
+}
+
+// 数据管理：导出
+function saveSettingsBackup() {
+  exportList();
+}
+
+// ================= 通知中心 =================
+const _MASKED = "●●●●●●";
+const _NEVER_MASK = new Set(["tg_bot_token"]);
+const _MASK_REVEAL = new Set(["tg_chat_ids"]);
+
+async function openNotifyCenter() {
+  const d = await api('/api/streamers');
+  CONFIG = d.config || {};
+  $('ncTgOn').checked = !!(CONFIG.tg_bot_token || CONFIG.tg_chat_ids);
+  $('ncTgToken').value = CONFIG.tg_bot_token || '';
+  $('ncTgChats').value = CONFIG.tg_chat_ids || '';
+  $('ncTgProxy').value = CONFIG.tg_proxy || '';
+  $('ncEmailOn').checked = !!CONFIG.email_enabled;
+  selectSmtp(CONFIG.email_smtp || '');
+  $('ncEmailPort').value = CONFIG.email_port || '465';
+  $('ncEmailUser').value = CONFIG.email_user || '';
+  $('ncEmailPass').value = CONFIG.email_pass || '';
+  $('ncEmailFrom').value = CONFIG.email_from || '';
+  $('ncEmailTo').value = CONFIG.email_to || '';
+  $('ncEmailPrefix').value = CONFIG.email_subject_prefix || '抖音直播';
+  $('ncEmailSubj').value = CONFIG.email_subject_template || '';
+  $('ncEmailBody').value = CONFIG.email_body_template || '';
+  $('ncWhUrl').value = CONFIG.webhook_url || '';
+  document.querySelectorAll('#notifyMask .tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+  document.querySelectorAll('#notifyMask .tabpage').forEach((p, i) => p.classList.toggle('active', i === 0));
+  updateNcStatus();
+  loadNotifyLog();
+  $('notifyMask').classList.add('show');
+}
+
+function updateNcStatus() {
+  const tgOk = !!(CONFIG.tg_bot_token || $('ncTgToken').value.trim());
+  const emailOk = !!(($('ncEmailOn').checked) && ($('ncEmailSmtp').value.trim() && $('ncEmailUser').value.trim()));
+  const whOk = !!(CONFIG.webhook_url || $('ncWhUrl').value.trim());
+  $('ncTgStatus').textContent = tgOk ? '已配置' : '未配置';
+  $('ncTgStatus').className = 'ncstatus ' + (tgOk ? 'on' : 'off');
+  $('ncEmailStatus').textContent = emailOk ? '已配置' : '未配置';
+  $('ncEmailStatus').className = 'ncstatus ' + (emailOk ? 'on' : 'off');
+  $('ncWhStatus').textContent = whOk ? '已配置' : '未配置';
+  $('ncWhStatus').className = 'ncstatus ' + (whOk ? 'on' : 'off');
+  const total = [tgOk, emailOk, whOk].filter(Boolean).length;
+  $('notifySummary').textContent = `已配置 ${total}/3 个通道`;
+}
+
+async function ncShowRaw(inputId) {
+  try {
+    const d = await api('/api/config?raw=1');
+    const cfg = d.config || {};
+    const keyMap = { 'ncTgChats': 'tg_chat_ids' };
+    const key = keyMap[inputId];
+    if (key && cfg[key]) {
+      $(inputId).value = cfg[key];
+    }
+  } catch (e) {
+    toast('获取失败', e.message, 'warn');
+  }
+}
+
+function toggleNcTgProxyHint() {
+  const el = $('ncTgProxyHint');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function fillSmtpDefaults() {
+  const wrapper = document.getElementById('ncEmailSmtpWrap');
+  if (!wrapper) return;
+  const sel = $('ncEmailSmtp');
+  const portInput = $('ncEmailPort');
+  const defaults = {
+    'smtp.gmail.com': '465',
+    'smtp.qq.com': '465',
+    'smtp.163.com': '465',
+    'smtp.126.com': '465',
+    'smtp.exmail.qq.com': '465',
+    'smtp.office365.com': '587',
+    'smtp.sina.com.cn': '465',
+    'smtp.sohu.com': '465',
+  };
+  if (sel.value === '__custom__') {
+    const input = wrapper.querySelector('input#ncEmailSmtpCustom');
+    if (input) {
+      input.style.display = 'block';
+      sel.style.display = 'none';
+      input.focus();
+      portInput.value = '465';
+    }
+  } else {
+    sel.style.display = 'block';
+    const input = wrapper.querySelector('input#ncEmailSmtpCustom');
+    if (input) input.style.display = 'none';
+    const port = defaults[sel.value];
+    if (port) portInput.value = port;
+  }
+}
+
+function selectSmtp(val) {
+  const sel = $('ncEmailSmtp');
+  const options = sel.options;
+  for (let i = 0; i < options.length; i++) {
+    if (options[i].value === val) {
+      sel.selectedIndex = i;
+      return;
+    }
+  }
+  sel.value = '__custom__';
+  fillSmtpDefaults();
+  const input = document.getElementById('ncEmailSmtpCustom');
+  if (input) input.value = val || '';
+}
+
+function ncShowResult(targetId, ok, msg) {
+  const el = $(targetId);
+  el.style.display = 'block';
+  el.textContent = (ok ? '✅ ' : '❌ ') + msg;
+  el.style.color = ok ? 'var(--green)' : '#ff6b81';
+}
+
+async function ncTest(channel, event) {
+  const body = await _ncCollectBody();
+  body.event = event;
+  const saved = await api('/api/config?raw=1');
+  const savedCfg = saved.config || {};
+  try {
+    let patch = {};
+    if (channel === 'tg') {
+      patch = {tg_bot_token: body.tg_bot_token, tg_chat_ids: body.tg_chat_ids, tg_proxy: body.tg_proxy, email_enabled: false, webhook_url: ''};
+    } else if (channel === 'email') {
+      patch = {tg_bot_token: '', tg_chat_ids: '', tg_proxy: '', email_enabled: true, webhook_url: '',
+        email_smtp: body.email_smtp, email_port: body.email_port, email_user: body.email_user,
+        email_pass: body.email_pass, email_from: body.email_from, email_to: body.email_to,
+        email_subject_prefix: body.email_subject_prefix,
+        email_subject_template: body.email_subject_template,
+        email_body_template: body.email_body_template};
+    } else {
+      patch = {tg_bot_token: '', tg_chat_ids: '', tg_proxy: '', email_enabled: false, webhook_url: body.webhook_url};
+    }
+    await _ncPatch(patch);
+    const r = await api('/api/notify', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({event})});
+    ncShowResult(channel === 'tg' ? 'ncTgResult' : channel === 'email' ? 'ncEmailResult' : 'ncWhResult', r.ok, r.msg || (r.ok ? '通知发送成功' : '发送失败'));
+  } catch (e) {
+    ncShowResult(channel === 'tg' ? 'ncTgResult' : channel === 'email' ? 'ncEmailResult' : 'ncWhResult', false, '网络错误: ' + e.message);
+  } finally {
+    await _ncPatch(savedCfg);
+  }
+}
+
+async function _ncPatch(patch) {
+  const r = await api('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(patch)});
+  if (r.ok) Object.assign(CONFIG, r.config);
+  return r;
+}
+
+async function _ncCollectBody() {
+  const raw = await api('/api/config?raw=1');
+  const rawCfg = raw.config || {};
+
+  function _v(inputId) {
+    const v = $(inputId).value.trim();
+    if (v === _MASKED) {
+      const keyMap = {
+        'ncTgToken': 'tg_bot_token',
+        'ncTgChats': 'tg_chat_ids',
+        'ncTgProxy': 'tg_proxy',
+        'ncEmailPass': 'email_pass',
+      };
+      const key = keyMap[inputId];
+      if (key && _NEVER_MASK.has(key)) {
+        return undefined;
+      }
+      if (key && _MASK_REVEAL.has(key)) {
+        return rawCfg[key] || '';
+      }
+      return '';
+    }
+    return v;
+  }
+
+  function getEffectiveSmtp() {
+    const sel = $('ncEmailSmtp');
+    if (sel.value === '__custom__') {
+      return $('ncEmailSmtpCustom').value.trim();
+    }
+    return sel.value;
+  }
+
+  return {
+    tg_bot_token: _v('ncTgToken'),
+    tg_chat_ids: _v('ncTgChats'),
+    tg_proxy: _v('ncTgProxy'),
+    email_enabled: $('ncEmailOn').checked,
+    email_smtp: getEffectiveSmtp(),
+    email_port: $('ncEmailPort').value.trim() || '465',
+    email_user: _v('ncEmailUser'),
+    email_pass: _v('ncEmailPass'),
+    email_from: _v('ncEmailFrom'),
+    email_to: _v('ncEmailTo'),
+    email_subject_prefix: _v('ncEmailPrefix') || '抖音直播',
+    email_subject_template: $('ncEmailSubj').value.trim(),
+    email_body_template: $('ncEmailBody').value.trim(),
+    webhook_url: _v('ncWhUrl'),
+  };
+}
+
+async function _ncSaveAll(closeAfterSave) {
+  const body = await _ncCollectBody();
+  const r = await api('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (r.ok) {
+    Object.assign(CONFIG, r.config);
+    updateNcStatus();
+    if (closeAfterSave) {
+      toast('通知设置已保存', '下次开播/下播将按新配置推送', 'ok');
+    }
+  }
+  return r;
+}
+
+async function ncSave() {
+  await _ncSaveAll(true);
+}
+
+async function loadNotifyLog() {
+  try {
+    const d = await api('/api/logs');
+    const logs = (d.logs || []).filter(l => String(l.msg || '').includes('通知'));
+    const list = $('notifyLogList');
+    $('notifyLogCount').textContent = `共 ${logs.length} 条`;
+    if (!logs.length) {
+      list.innerHTML = '<div class="hint">暂无通知记录</div>';
+      return;
+    }
+    list.innerHTML = logs.slice().reverse().map(l => {
+      const cls = l.level === 'error' ? 'lv-err' : l.level === 'warn' ? 'lv-warn' : 'lv-ok';
+      return `<div class="nclogitem">
+        <span>${fmtTime(l.ts)}</span>
+        <span class="${cls}">[${l.level}]</span>
+        <span>${esc(l.msg)}</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    $('notifyLogList').innerHTML = `<div class="hint">加载日志失败: ${esc(e.message)}</div>`;
+  }
+}
+
+// ================= 备份中心 =================
+async function openBackupCenter() {
+  loadBackupList();
+  $('backupMask').classList.add('show');
+}
+
+async function loadBackupList() {
+  try {
+    const d = await api('/api/backup/list');
+    const backups = d.backups || [];
+    const area = $('backupListArea');
+    $('backupCount').textContent = `共 ${backups.length} 个`;
+    $('backupSummary').textContent = backups.length > 0 ? `${backups.length} 个备份` : '暂无备份';
+    if (!backups.length) {
+      area.innerHTML = '<div class="hint">暂无备份，去「创建备份」Tab 新建一个</div>';
+      return;
+    }
+    area.innerHTML = backups.map(b => {
+      const created = b.created_str || b.id;
+      const tag = b.tag ? ` <span style="color:var(--yellow);font-size:11px">· ${esc(b.tag)}</span>` : '';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--panel2);border-radius:10px;border:1px solid var(--line);margin-bottom:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600">${esc(b.id)}${tag}</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:2px">${created} · ${b.file_count || '?'} 个文件</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn sm" onclick="restoreBackup('${esc(b.id)}')">📤 回档</button>
+          <button class="btn sm danger" onclick="deleteBackup('${esc(b.id)}')">🗑 删除</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    $('backupListArea').innerHTML = `<div class="hint">加载备份列表失败: ${esc(e.message)}</div>`;
+  }
+}
+
+async function createBackup() {
+  const tag = $('bkpTag').value.trim();
+  const msg = $('bkpResult');
+  msg.style.display = 'block';
+  msg.textContent = '正在创建备份...';
+  msg.style.color = 'var(--dim)';
+  try {
+    const r = await api('/api/backup/create', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tag: tag || undefined})
+    });
+    if (r.ok) {
+      msg.textContent = '✅ ' + (r.msg || `备份 ${esc(r.id)} 已创建`);
+      msg.style.color = 'var(--green)';
+      $('bkpTag').value = '';
+      loadBackupList();
+    } else {
+      msg.textContent = '❌ ' + (r.msg || '创建失败');
+      msg.style.color = '#ff6b81';
+    }
+  } catch (e) {
+    msg.textContent = '❌ 网络错误: ' + e.message;
+    msg.style.color = '#ff6b81';
+  }
+}
+
+async function restoreBackup(bid) {
+  showConfirm('📤 回档确认',
+    `确定要从备份 <b>${esc(bid)}</b> 回档吗？<br><br>` +
+    `<span style="color:var(--yellow)">⚠ 这将覆盖项目源码文件（.py / .html 等），但不影响数据库、配置文件和录制文件。</span>`,
+    async () => {
+      try {
+        const r = await api('/api/backup/restore', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({id: bid})
+        });
+        if (r.ok) {
+          toast('回档成功', r.msg || '已回档', 'ok');
+          loadBackupList();
+        } else {
+          toast('回档失败', r.msg || '失败', 'warn');
+        }
+      } catch (e) {
+        toast('回档失败', e.message, 'warn');
+      }
+    }
+  );
+}
+
+async function deleteBackup(bid) {
+  showConfirm('🗑 删除备份',
+    `确定删除备份 <b>${esc(bid)}</b> 吗？<br><br>` +
+    `<span style="color:var(--yellow)">⚠ 此操作不可撤销。</span>`,
+    async () => {
+      try {
+        const r = await api('/api/backup/delete', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({id: bid})
+        });
+        if (r.ok) {
+          toast('备份已删除', bid, 'ok');
+          loadBackupList();
+        } else {
+          toast('删除失败', r.msg || '失败', 'warn');
+        }
+      } catch (e) {
+        toast('删除失败', e.message, 'warn');
+      }
+    }
+  );
+}
+
+async function deleteAllBackups() {
+  showConfirm('🗑 删除所有备份',
+    `确定删除 <b>所有备份</b> 吗？<br><br>` +
+    `<span style="color:#ff6b81">🔥 此操作不可撤销，所有备份数据将永久丢失！</span>`,
+    async () => {
+      try {
+        const r = await api('/api/backup/delete', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({all: true})
+        });
+        if (r.ok) {
+          toast('所有备份已删除', '', 'ok');
+          loadBackupList();
+        } else {
+          toast('删除失败', r.msg || '失败', 'warn');
+        }
+      } catch (e) {
+        toast('删除失败', e.message, 'warn');
+      }
+    }
+  );
+}
+
+// ================= 导出/导入 =================
+function exportList() {
+  window.open('/api/export');
+}
+async function importList(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  const text = await f.text();
+  const r = await api('/api/import', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({content: text})});
+  toast(r.msg || (r.ok ? '导入成功' : '导入失败'), '', r.ok ? 'ok' : 'warn');
+  ev.target.value = '';
+}
+
+// ================= 存储管理 =================
+async function refreshStorageStatus() {
+  const loading = $('storageStatusLoading');
+  const content = $('storageStatusContent');
+  if (!loading || !content) return;
+  loading.style.display = 'block';
+  content.style.display = 'none';
+
+  try {
+    const r = await api('/api/storage/status');
+    if (!r.ok) {
+      loading.textContent = '获取状态失败';
+      return;
+    }
+
+    const mongo = r.mongodb || {};
+    const mongoInfo = $('storageMongoInfo');
+    const mongoDot = $('storageMongoDot');
+
+    if (mongo.ok) {
+      if (mongoInfo) mongoInfo.textContent = mongo.msg || '连接正常';
+      if (mongoDot) mongoDot.style.background = '#22c55e';
+    } else {
+      if (mongoInfo) mongoInfo.textContent = mongo.msg || '不可用';
+      if (mongoDot) mongoDot.style.background = '#f87171';
+    }
+    const addr = $('storageMongoAddr');
+    if (addr) addr.textContent = mongo.addr || '-';
+
+    loading.style.display = 'none';
+    content.style.display = 'block';
+  } catch (e) {
+    loading.textContent = '获取状态失败: ' + e.message;
+  }
+}
+
+async function testStorageConnection() {
+  const hint = $('cfgStorageHint');
+  hint.style.display = 'block';
+  hint.textContent = '正在测试 MongoDB 连接...';
+  hint.style.color = 'var(--dim)';
+  $('btnStorageTest').disabled = true;
+  try {
+    const r = await api('/api/storage/test', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+    if (r.ok) {
+      hint.textContent = '✓ MongoDB 连接正常: ' + esc(r.msg);
+      hint.style.color = '#22c55e';
+      $('storageMongoDot').style.background = '#22c55e';
+      $('storageMongoInfo').textContent = '连接正常';
+    } else {
+      hint.textContent = '✗ MongoDB 不可用: ' + esc(r.msg);
+      hint.style.color = '#f87171';
+      $('storageMongoDot').style.background = '#f87171';
+      $('storageMongoInfo').textContent = '连接失败';
+    }
+  } catch (e) {
+    hint.textContent = '✗ 请求失败: ' + e.message;
+    hint.style.color = '#f87171';
+  } finally {
+    $('btnStorageTest').disabled = false;
+  }
+}
+
+// ================= 数据库管理 =================
+async function refreshDbStatus() {
+  const loading = $('dbStatusLoading');
+  const content = $('dbStatusContent');
+  if (!loading) return;
+  loading.style.display = 'block';
+  content.style.display = 'none';
+
+  try {
+    const r = await api('/api/storage/status');
+    if (!r.ok) {
+      loading.textContent = '获取状态失败';
+      return;
+    }
+
+    const mongo = (r.mongodb && r.mongodb.ok && r.mongodb.counts) ? r.mongodb.counts : {};
+    const tables = [
+      {name: 'config', count: mongo.config || 0, desc: '设置'},
+      {name: 'streamers', count: mongo.streamers || 0, desc: '主播列表'},
+      {name: 'history', count: mongo.history || 0, desc: '直播历史'},
+      {name: 'recordings', count: mongo.recordings || 0, desc: '录制记录'},
+      {name: 'logs', count: mongo.logs || 0, desc: '系统日志'},
+      {name: 'notify_logs', count: mongo.notify_logs || 0, desc: '通知记录'},
+      {name: 'fudai', count: mongo.fudai || 0, desc: '福袋状态'},
+      {name: 'fudai_history', count: mongo.fudai_history || 0, desc: '福袋历史'},
+      {name: 'accounts', count: mongo.accounts || 0, desc: '账号'},
+    ];
+
+    const thTable = $('dbThTable');
+    const thCount = $('dbThCount');
+    if (thTable && thCount) {
+      thTable.textContent = '表名';
+      thCount.textContent = '记录数 (MongoDB)';
+    }
+
+    const tbody = $('dbTableBody');
+    if (tbody) {
+      tbody.innerHTML = tables.map(t => {
+        return `<tr style="border-bottom:1px solid var(--line)">
+          <td style="padding:5px 4px;font-weight:${t.name==='config'||t.name==='streamers'?'600':'400'}">${t.name}</td>
+          <td style="padding:5px 4px;text-align:right;color:${t.count>0?'var(--accent)':'var(--dim)'}">${t.count}</td>
+          <td style="padding:5px 4px;color:var(--dim)">${t.desc}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    loading.style.display = 'none';
+    content.style.display = 'block';
+
+    loadNotifyLogDb();
+    loadFudaiHistoryDb();
+  } catch (e) {
+    loading.textContent = '获取状态失败: ' + e.message;
+  }
+}
+
+async function loadNotifyLogDb() {
+  const el = $('notifyLogListDb');
+  if (!el) return;
+  el.innerHTML = '<span style="color:var(--dim)">加载中...</span>';
+  try {
+    const r = await api('/api/notify/logs?limit=20');
+    if (!r.ok || !r.logs || r.logs.length === 0) {
+      el.innerHTML = '<span style="color:var(--dim)">暂无通知记录</span>';
+      return;
+    }
+    el.innerHTML = r.logs.map(log => {
+      const ts = new Date(log.ts * 1000).toLocaleString();
+      const statusIcon = log.status === 'success' ? '✓' : '✗';
+      const statusColor = log.status === 'success' ? '#22c55e' : '#f87171';
+      return `<div style="padding:4px 0;border-bottom:1px solid var(--line);font-size:11px">
+        <span style="color:var(--dim)">${ts}</span>
+        <span style="color:${statusColor}">${statusIcon} ${log.channel}</span>
+        <span>[${log.event_type}]</span>
+        <span>${esc(log.streamer_nickname||'')}</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<span style="color:#f87171">加载失败: ${e.message}</span>`;
+  }
+}
+
+async function loadFudaiHistoryDb() {
+  const el = $('fudaiHistList');
+  if (!el) return;
+  el.innerHTML = '<span style="color:var(--dim)">加载中...</span>';
+  try {
+    const r = await api('/api/fudai/history?limit=20');
+    if (!r.ok || !r.history || r.history.length === 0) {
+      el.innerHTML = '<span style="color:var(--dim)">暂无福袋记录</span>';
+      return;
+    }
+    el.innerHTML = r.history.map(h => {
+      const ts = new Date(h.started_at * 1000).toLocaleString();
+      return `<div style="padding:4px 0;border-bottom:1px solid var(--line);font-size:11px">
+        <span style="color:var(--dim)">${ts}</span>
+        <span style="color:var(--accent)">🎁 ${esc(h.gift_name||'')}</span>
+        <span>${esc(h.nickname||'')}</span>
+        <span>${h.lucky_count||0}个</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<span style="color:#f87171">加载失败: ${e.message}</span>`;
+  }
+}
+
+// ================= 启动 =================
+checkAuth();
+</script>
+</body>
+</html>

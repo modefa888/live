@@ -1,0 +1,2279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="version" content="20260820-0110">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抖音直播监控</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#171e2e; --panel2:#1e2740; --line:#2a3554;
+    --txt:#e6ecf7; --dim:#8b98b8; --accent:#ff3b5c; --green:#22c55e;
+    --yellow:#eab308; --blue:#3b82f6; --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:radial-gradient(1200px 600px at 80% -10%,#1a2440 0%,var(--bg) 55%);color:var(--txt);
+       font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;min-height:100vh}
+  .wrap{max-width:1200px;margin:0 auto;padding:18px 20px 90px}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#ff3b5c,#ff8a3b);
+        display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px #ff3b5c44}
+  h1{font-size:20px;font-weight:700}
+  .sub{color:var(--dim);font-size:12px;margin-top:2px}
+  .spacer{flex:1}
+  .btn{border:none;cursor:pointer;color:#fff;background:var(--panel2);border:1px solid var(--line);
+       padding:8px 14px;border-radius:10px;font-size:13px;transition:.15s;display:inline-flex;align-items:center;gap:6px}
+  .btn:hover{border-color:#4a5a85;transform:translateY(-1px)}
+  .btn.primary{background:linear-gradient(135deg,#ff3b5c,#ff7a3b);border:none}
+  .btn.ghost{background:transparent}
+  .btn.danger:hover{border-color:#ff3b5c;color:#ff6b81}
+  .btn.sm{padding:5px 10px;font-size:12px;border-radius:8px}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+  .statusbar{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:12px;margin-bottom:16px;flex-wrap:wrap}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:5px}
+  .dot.off{background:#64748b}
+  .dot.pulse{animation:pulse 1.5s infinite}
+  @keyframes pulse{0%{opacity:1}50%{opacity:0.3}100%{opacity:1}}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
+        transition:.2s;position:relative}
+  .card:hover{border-color:#3d4d7a;transform:translateY(-2px);box-shadow:0 8px 24px #00000055}
+  .card.live{border-color:#ff3b5c66}
+  .cover{position:relative;aspect-ratio:16/9;background:linear-gradient(135deg,#1a2440,#0a0f1c);overflow:hidden}
+  .cover img{width:100%;height:100%;object-fit:cover;display:block;transition:opacity .3s ease}
+  .cover img.fade-in{opacity:0}
+  .cover img.fade-in.loaded{opacity:1}
+  .cover .ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:44px;opacity:.35}
+  .badge{position:absolute;top:10px;left:10px;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+  .badge.live{background:#ff3b5c;box-shadow:0 2px 10px #ff3b5c88}
+  .badge.off{background:#00000088;backdrop-filter:blur(4px)}
+  .badge.wait{background:#00000088}
+  .badge.fudai{background:#f59e0b;color:#000;right:10px;left:auto;top:10px;box-shadow:0 2px 10px #f59e0b88;cursor:pointer}
+  .fd-time{color:#000;font-size:11px;opacity:.8;margin-left:4px}
+  /* 悬浮框：用 fixed 定位，由 JS 计算位置并动态移动到 <body> 下，
+     彻底脱离 .card/.cover 的 overflow:hidden 裁剪，
+     也避开 .card:hover transform 创建的 containing block */
+  .fd-tip{position:fixed;left:0;top:0;background:#f59e0b;border:1px solid #eab308;border-radius:10px;padding:10px 14px;font-size:12px;color:#000;white-space:nowrap;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .2s,transform .2s;z-index:99999;box-shadow:0 8px 24px #00000066;min-width:180px;line-height:1.7;display:none}
+  .fd-tip.show{opacity:1;transform:translateY(0);pointer-events:auto;display:block}
+  .fd-tip .fd-label{color:#000;opacity:.7;display:inline-block;min-width:56px}
+  .fd-tip .fd-conds{max-width:220px;white-space:normal;word-break:break-all}
+  .livecount{position:absolute;bottom:8px;left:10px;background:#000000aa;padding:2px 8px;border-radius:12px;font-size:11px}
+  .cardbody{padding:12px 14px}
+  .row1{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .avatar{width:36px;height:36px;border-radius:50%;background:var(--panel2);flex-shrink:0;overflow:hidden;border:1px solid var(--line)}
+  .avatar img{width:100%;height:100%;object-fit:cover}
+  .avatar .ph{display:flex;align-items:center;justify-content:center;width:100%;height:100%}
+  .name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .uid{color:var(--dim);font-size:11px}
+  .note{color:var(--yellow);font-size:11px;margin-bottom:4px}
+  .title{font-size:13px;color:#c8d4ec;margin:6px 0 8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:18px}
+  .title.none{color:var(--dim);font-style:italic}
+  .stats{display:flex;gap:12px;color:var(--dim);font-size:11px;margin-bottom:10px;flex-wrap:wrap}
+  .stats b{color:var(--txt);font-weight:600}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .actions .btn{flex:1;justify-content:center;white-space:nowrap}
+  .errbox{background:#3b0f1c;border:1px solid #ff3b5c44;color:#ff97a8;font-size:11px;
+          padding:6px 10px;border-radius:8px;margin-bottom:8px;word-break:break-all}
+  .empty{text-align:center;color:var(--dim);padding:60px 20px;border:2px dashed var(--line);border-radius:var(--radius)}
+  .empty .big{font-size:46px;margin-bottom:12px}
+  .modal-mask{position:fixed;inset:0;background:#00000088;backdrop-filter:blur(3px);display:none;
+              align-items:center;justify-content:center;z-index:50;padding:16px}
+  .modal-mask.show{display:flex}
+  #confirmMask{z-index:9999}
+  #loginMask{z-index:999999}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:720px;width:100%;
+         max-height:92vh;overflow:auto;box-shadow:0 20px 60px #000000aa}
+  .modal-head{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:2}
+  .modal-head h3{flex:1;font-size:15px}
+  .modal-body{padding:16px 18px}
+  .confirm-msg{font-size:14px;padding:8px 0}
+  input,select,textarea{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+        border-radius:10px;padding:9px 12px;font-size:13px;width:100%;outline:none}
+  input:focus,select:focus{border-color:var(--accent)}
+  label{display:block;font-size:12px;color:var(--dim);margin:12px 0 6px}
+  .hint{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.7}
+  .hint code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:#9db4e8}
+  .parsebox{background:var(--panel2);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:12px;display:none}
+  .parsebox .preview-avatar{width:30px;height:30px;border-radius:50%;vertical-align:middle;margin-right:6px;object-fit:cover}
+  .player-stage{position:relative;background:#000;aspect-ratio:16/9}
+  video{width:100%;height:100%;display:block}
+  .player-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--dim);text-align:center;padding:20px}
+  .player-msg .spinner{width:36px;height:36px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .player-tools{display:flex;gap:8px;padding:12px 14px;flex-wrap:wrap}
+  .player-tools .btn{flex:1;justify-content:center}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{color:var(--dim);font-weight:500;white-space:nowrap}
+  td.url{word-break:break-all;color:#9db4e8;font-size:11px;max-width:200px}
+  .copybtn{cursor:pointer;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+           border-radius:6px;padding:3px 8px;font-size:11px;white-space:nowrap}
+  .copybtn:hover{border-color:var(--blue)}
+  #toasts{position:fixed;top:16px;right:16px;z-index:99;display:flex;flex-direction:column;gap:10px}
+  .toast{background:rgba(30,39,64,0.25);border:1px solid var(--line);border-left:4px solid var(--accent);
+         border-radius:12px;padding:12px 16px;min-width:240px;max-width:340px;box-shadow:none;
+         animation:slidein .25s ease}
+  .toast.ok{border-left-color:var(--green)}
+  .toast.warn{border-left-color:var(--yellow)}
+  @keyframes slidein{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
+  .toast b{display:block;margin-bottom:3px}
+  .toast span{font-size:12px;color:var(--dim)}
+  #recpanel{position:fixed;right:16px;bottom:16px;z-index:40;background:var(--panel);border:1px solid var(--line);
+            border-radius:14px;padding:14px 16px;width:400px;max-height:56vh;overflow:auto;display:none;box-shadow:0 12px 40px #00000099}
+  #recpanel.show{display:block}
+  .rectitle{font-size:13px;font-weight:600;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+  .rectitle .rec-dot{width:8px;height:8px;border-radius:50%;background:#ff3b5c;animation:blink 1.2s infinite;flex-shrink:0}
+  .rectitle .rec-count{font-size:11px;color:var(--dim);font-weight:400;margin-left:2px}
+  .rectitle .spacer{flex:1}
+  .recitem{font-size:12px;padding:11px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center}
+  .recitem:first-of-type{border-top:none;padding-top:5px}
+  .rec-dot{width:8px;height:8px;border-radius:50%;background:#ff3b5c;flex-shrink:0;animation:blink 1.2s infinite}
+  .recmain{min-width:0;display:flex;align-items:center;gap:10px}
+  .recinfo{min-width:0;flex:1}
+  .recname{font-size:13.5px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .recname .rlbl{font-size:9.5px;color:var(--dim);font-weight:400;padding:1px 6px;border-radius:8px;background:var(--panel2);border:1px solid var(--line)}
+  .recstats{font-size:10.5px;color:var(--dim);margin-top:4px;display:flex;flex-wrap:wrap;gap:3px 8px;line-height:1.5}
+  .recstats .sep{color:#3d4a68}
+  .recaction{flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+  .recstop{width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--dim);
+           display:inline-flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;transition:.15s;line-height:1}
+  .recstop:hover{border-color:#ff3b5c;color:#ff3b5c;background:#221019}
+  @keyframes blink{50%{opacity:.3}}
+  .logitem{font-size:11px;padding:4px 0;border-bottom:1px dashed var(--line);color:var(--dim);display:flex;gap:8px;align-items:flex-start}
+  .logitem .lv-error{color:#ff6b81}.logitem .lv-warn{color:#facc15}.logitem .lv-info{color:#7dd3fc}
+  .logitem .log-streamer{color:#a78bfa;font-weight:600;flex-shrink:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .logitem .log-sys{color:#64748b;font-weight:600;flex-shrink:0}
+  .logitem .log-msg{flex:1;line-height:1.5}
+  .switch{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--dim)}
+  .switch input{width:auto}
+  .radio-switch{display:flex;align-items:center;padding:8px 12px;margin-top:8px;background:var(--bg);border:1px solid var(--line);border-radius:8px;cursor:pointer;user-select:none;transition:border-color .2s}
+  .radio-switch:hover{border-color:var(--accent)}
+  .radio-switch input[type="radio"]{margin-right:10px}
+  .radio-switch-name{font-size:13px;color:var(--txt);min-width:130px}
+  .radio-switch-desc{font-size:11px;color:var(--dim)}
+  .quality-bar{display:flex;gap:6px;flex-wrap:wrap}
+  .quality-bar .qbtn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;
+       padding:4px 10px;font-size:12px;cursor:pointer}
+  .quality-bar .qbtn.active{border-color:var(--accent);color:#fff;background:#ff3b5c33}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px}
+  .tab{padding:8px 14px;cursor:pointer;font-size:13px;color:var(--dim);border-bottom:2px solid transparent}
+  .tab.active{color:var(--txt);border-bottom-color:var(--accent)}
+  .tabpage{display:none}.tabpage.active{display:block}
+  footer{color:var(--dim);font-size:11px;text-align:center;margin-top:30px;line-height:1.8}
+  /* ---------- 通知中心 ---------- */
+  .nccard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+  .nchead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .nchead h4{flex:1;font-size:14px}
+  .ncstatus{font-size:11px;padding:3px 10px;border-radius:12px;border:1px solid var(--line)}
+  .ncstatus.on{background:#0d3320;color:var(--green);border-color:#166534}
+  .ncstatus.off{background:#1e1b2e;color:#8b98b8;border-color:var(--line)}
+  .ncrow{display:flex;gap:10px}
+  .ncrow > *{flex:1}
+  .nctip{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.7}
+  .nctip code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:#9db4e8}
+  .nclogitem{font-size:11px;padding:6px 0;border-bottom:1px dashed var(--line);color:var(--dim);display:flex;gap:8px}
+  .nclogitem .lv-ok{color:var(--green)}
+  .nclogitem .lv-err{color:#ff6b81}
+  .nclogitem .lv-warn{color:#facc15}
+  .nctoggle{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer}
+  .nctoggle input{width:auto}
+  .nctestbtn{margin-top:10px}
+  /* 状态栏筛选按钮 */
+  .filter-btn{border:none;cursor:pointer;padding:3px 10px;border-radius:10px;font-size:11px;
+              background:var(--panel2);border:1px solid var(--line);color:var(--dim);transition:.15s}
+  .filter-btn:hover{border-color:#4a5a85;color:var(--txt)}
+  .filter-btn.active{background:#ff3b5c22;border-color:var(--accent);color:var(--accent);font-weight:600}
+  /* ---------- 骨架屏 ---------- */
+  .sk-skeleton{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .sk-cover{position:relative;aspect-ratio:16/9;background:var(--panel2);overflow:hidden}
+  .sk-cover .sk-badge{position:absolute;top:10px;left:10px;width:82px;height:22px;border-radius:20px}
+  .sk-cover .sk-livecount{position:absolute;bottom:8px;left:10px;width:70px;height:14px;border-radius:7px}
+  .sk-body{padding:12px 14px}
+  .sk-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .sk-avatar{width:36px;height:36px;border-radius:50%;flex-shrink:0}
+  .sk-name{flex:1;height:14px;border-radius:7px}
+  .sk-uid{width:65%;height:10px;border-radius:5px;margin-top:6px}
+  .sk-title{height:16px;width:88%;border-radius:8px;margin-bottom:6px}
+  .sk-title2{height:16px;width:55%;border-radius:8px;margin-bottom:12px}
+  .sk-stats{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+  .sk-stats span{flex:1;height:10px;border-radius:5px}
+  .sk-actions{display:flex;gap:8px}
+  .sk-actions .sk-btn{flex:1;height:32px;border-radius:8px;border:none;background:var(--panel2);cursor:default}
+  .sk-actions .sk-btn.primary{background:#ff3b5c33}
+  .sk-shimmer{background:linear-gradient(90deg,var(--panel2) 25%,#2a3554 50%,var(--panel2) 75%);background-size:200% 100%;animation:sk-shimmer 1.6s ease-in-out infinite}
+  @keyframes sk-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  .sk-fade-in{animation:sk-fadein .3s ease}
+  @keyframes sk-fadein{from{opacity:0}to{opacity:1}}
+  /* 直播广场分类条：隐藏滚动条 */
+  #squareCatList::-webkit-scrollbar{display:none}
+  #squareCatList{scrollbar-width:none;-ms-overflow-style:none}
+  #squareCatList .btn.cat4{background:rgba(139,92,246,.18);color:#c4b5fd;border-color:rgba(139,92,246,.5)}
+  /* 全局自定义滚动条（替代系统滚动条） */
+  *::-webkit-scrollbar{width:6px;height:6px}
+  *::-webkit-scrollbar-track{background:transparent}
+  *::-webkit-scrollbar-thumb{background:var(--line,#2a3554);border-radius:3px}
+  *::-webkit-scrollbar-thumb:hover{background:#3a4a70}
+  *{scrollbar-width:thin;scrollbar-color:var(--line,#2a3554) transparent}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">📺</div>
+    <div>
+      <h1>抖音直播监控</h1>
+      <div class="sub" id="subInfo">正在连接…</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" id="addBtn" onclick="openAdd()" style="display:none">➕ 添加主播</button>
+    <button class="btn" id="refreshBtn" onclick="refreshAll()" style="display:none">🔄 刷新</button>
+    <button class="btn" id="recToggle" onclick="toggleRecPanel()" style="display:none">⏺ 录制 <span id="recBadge" style="background:#ff3b5c;border-radius:12px;padding:0 8px;font-size:11px;display:none"></span></button>
+    <button class="btn" onclick="openSquarePanel()" title="热搜榜/直播搜索">🛰 广场</button>
+    <a href="/admin.html" class="btn" title="后台管理" style="text-decoration:none;display:none" id="adminBtn">🛠 管理</a>
+    <div id="authStatus" style="display:flex;align-items:center;margin-left:8px"></div>
+  </header>
+
+  <!-- 启动占位：认证完成前显示，避免闪现登录态/游客态 -->
+  <div id="bootLoading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:80px 20px;gap:10px;color:var(--dim);font-size:13px">
+    <div style="font-size:40px;line-height:1">⏳</div>
+    <div>加载中...</div>
+  </div>
+
+  <!-- 游客提示面板（未登录时显示，游客仅可浏览广场） -->
+  <div id="guestPanel" style="display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:70px 20px;gap:14px">
+    <div style="font-size:56px;line-height:1">🔒</div>
+    <div style="font-size:18px;font-weight:600">您当前是游客</div>
+    <div style="font-size:13px;color:var(--dim);max-width:430px;line-height:1.7">游客可以浏览直播广场（热搜榜 / 直播搜索）。<br>登录后即可查看主播监控、添加主播、刷新状态、福袋检测、录制等完整功能。</div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn" onclick="openSquarePanel()">🛰 去广场看看</button>
+      <button class="btn primary" onclick="openLoginModal()">登录</button>
+    </div>
+  </div>
+
+  <div class="statusbar" id="statusbar" style="display:none">
+    <span><span class="dot" id="srvDot"></span><span id="srvText">未连接</span></span>
+    <span>|</span><span>在线: <b id="onlineCount" style="color:var(--green)">0</b></span>
+    <span>|</span><span>离线: <b id="offlineCount" style="color:#8b98b8">0</b></span>
+    <span>|</span><span>自动刷新: <b id="intervalText">-</b>s</span>
+    <span>|</span><span>上次刷新: <b id="lastRefresh">-</b></span>
+    <span>|</span><span id="ffmpegText"></span>
+    <span>|</span><span id="heartbeat" style="font-size:10px">❤️ 在线</span>
+    <span>|</span>
+    <span style="display:inline-flex;gap:6px;align-items:center">
+      <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">全部</button>
+      <button class="filter-btn" data-filter="online" onclick="setFilter('online')">🟢 在线</button>
+      <button class="filter-btn" data-filter="offline" onclick="setFilter('offline')">⚫ 离线</button>
+      <span id="filterCount" style="font-size:10px;color:var(--dim)"></span>
+    </span>
+  </div>
+
+  <div class="grid" id="grid" style="display:none"></div>
+  <div class="empty" id="empty" style="display:none">
+    <div class="big">📡</div>
+    <div>还没有监控任何主播<br>点击右上角「添加主播」开始</div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<div id="recpanel">
+  <div class="rectitle"><span class="rec-dot"></span>录制中 <span class="rec-count" id="recCount"></span>
+    <span class="spacer"></span>
+    <button class="btn sm" onclick="openRecDir()">📂 目录</button>
+    <button class="btn sm" onclick="showRecordHistory()">📋 历史</button>
+  </div>
+  <div id="recList"></div>
+</div>
+
+<!-- 添加主播弹窗 -->
+<div class="modal-mask" id="addMask">
+  <div class="modal">
+    <div class="modal-head"><h3>➕ 添加主播</h3><button class="btn sm ghost" onclick="closeModal('addMask')">✕</button></div>
+    <div class="modal-body">
+      <label>粘贴 直播间链接 / 分享短链 / 主播主页链接 / 直播间号</label>
+      <input id="addText" placeholder="例如: https://live.douyin.com/123456789012" oninput="debounceParse()">
+      <label>备注(可选)</label>
+      <input id="addNote" placeholder="例如: 游戏主播">
+      <div class="parsebox" id="parseBox"></div>
+      <div style="margin-top:16px;display:flex;gap:10px">
+        <button class="btn primary" style="flex:1" onclick="doAdd()">添加</button>
+        <button class="btn" onclick="closeModal('addMask')">取消</button>
+      </div>
+      <div class="hint">💡 粘贴直播间链接(含 /root/live/) 可自动识别主播信息</div>
+    </div>
+  </div>
+</div>
+
+<!-- 自定义确认框 -->
+<div class="modal-mask" id="confirmMask">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-head"><h3 id="confirmTitle">确认</h3><button class="btn sm ghost" onclick="closeModal('confirmMask')">✕</button></div>
+    <div class="modal-body">
+      <div class="confirm-msg" id="confirmMsg">确定执行此操作吗？</div>
+      <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn" id="confirmCancel" onclick="closeModal('confirmMask')">取消</button>
+        <button class="btn primary" id="confirmOk">确认</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 录制历史弹窗 -->
+<div class="modal-mask" id="historyMask">
+  <div class="modal" style="max-width:800px">
+    <div class="modal-head"><h3>📋 录制历史</h3><button class="btn sm ghost" onclick="closeModal('historyMask')">✕</button></div>
+    <div class="modal-body" id="historyBody">
+      <div style="color:var(--dim)">加载中…</div>
+    </div>
+  </div>
+</div>
+
+<!-- 播放器弹窗 -->
+<div class="modal-mask" id="playerMask">
+  <div class="modal" style="max-width:860px">
+    <div class="modal-head">
+      <h3 id="playerTitle">播放</h3>
+      <button class="btn sm ghost" onclick="closePlayer()">✕</button>
+    </div>
+    <div class="player-stage" id="playerStage">
+      <video id="video" controls autoplay playsinline></video>
+      <div class="player-msg" id="playerMsg" style="display:none">
+        <div class="spinner" id="playerSpinner"></div>
+        <div id="playerMsgText">加载中…</div>
+        <div class="quality-bar" id="qualityBar"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+          <button class="btn sm" onclick="retryPlay()">🔄 重试</button>
+          <button class="btn sm" onclick="playWithProxy()">🔌 代理播放</button>
+          <button class="btn sm" onclick="playExternal()">🖥 外部播放器</button>
+          <button class="btn sm" onclick="copyStream()">📋 复制源</button>
+        </div>
+      </div>
+    </div>
+    <div class="player-tools">
+      <span style="font-size:12px;color:var(--dim);align-self:center">清晰度:</span>
+      <div class="quality-bar" id="qualityBar2"></div>
+      <span class="spacer" style="flex:1"></span>
+      <button class="btn sm" onclick="document.getElementById('video').requestFullscreen()">⛶ 全屏</button>
+      <button class="btn sm" onclick="openLivePage()">↗ 直播间</button>
+    </div>
+  </div>
+</div>
+
+<!-- 详情弹窗 -->
+<div class="modal-mask" id="detailMask">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-head"><h3 id="detailTitle">详情</h3><button class="btn sm ghost" onclick="closeModal('detailMask')">✕</button></div>
+    <div class="modal-body">
+      <div class="tabs">
+        <div class="tab active" onclick="tab(this,'tabStreams')">直播源</div>
+        <div class="tab" onclick="tab(this,'tabCmds')">播放命令</div>
+        <div class="tab" onclick="tab(this,'tabHistory')">开播历史</div>
+        <div class="tab" onclick="tab(this,'tabRecords')">录播记录</div>
+        <div class="tab" onclick="tab(this,'tabLog')">最近日志</div>
+        <div class="tab" onclick="tab(this,'tabDetailSettings')">设置</div>
+      </div>
+      <div class="tabpage active" id="tabStreams"></div>
+      <div class="tabpage" id="tabCmds"></div>
+      <div class="tabpage" id="tabHistory"></div>
+      <div class="tabpage" id="tabRecords"></div>
+      <div class="tabpage" id="tabLog">
+        <div id="logList"></div>
+      </div>
+      <div class="tabpage" id="tabDetailSettings">
+        <div style="padding:10px 0">
+          <label style="font-weight:600;color:var(--txt)">主播设置</label>
+          <div class="switch" style="margin-top:10px">
+            <input type="checkbox" id="detFudaiEnabled" onchange="toggleFudaiEnabled()"> 启用福袋监测
+          </div>
+          <div class="hint" style="margin-top:4px">取消勾选后，该主播福袋将不再检测</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>直播源有时效性, 请及时刷新 · 录制文件保存于主播专属文件夹</footer>
+
+<script>
+// ================= 状态 =================
+let STREAMERS = [];
+let CONFIG = {};
+let currentDetail = null;
+let currentQuality = '';
+let hlsPlayer = null, flvPlayer = null;
+let usingProxy = false;
+let pollTimer = null;
+let countdown = 0; // 自动刷新倒计时剩余秒数
+let retryCount = 0;
+let confirmCallback = null;
+// 账号登录系统状态（需提前声明，避免 TDZ ReferenceError 导致 init() 无法执行）
+let AUTH_TOKEN = localStorage.getItem('authToken') || '';
+let AUTH_USER = null;
+let HAS_ACCOUNTS = false;
+let loginModalShown = false;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ================= API =================
+// 需要认证的 API 路径（前缀匹配，用于前端显示/隐藏受保护功能）
+const AUTH_REQUIRED = ['/api/add','/api/remove','/api/record','/api/config','/api/import','/api/pin','/api/update','/api/notify','/api/backup','/api/storage/test','/api/storage/copy'];
+
+async function api(url, opts) {
+  // 登录后所有 /api/ 请求都自动带 token
+  if (typeof url === 'string' && url.startsWith('/api/') && AUTH_TOKEN) {
+    opts = Object.assign({}, opts, {headers: Object.assign({}, opts && opts.headers || {}, {'Authorization': 'Bearer ' + AUTH_TOKEN})});
+  }
+  const r = await fetch(url, opts);
+  const t = await r.text();
+  let data;
+  try { data = JSON.parse(t); } catch { return {raw: t}; }
+  // 401 未登录
+  if (data && data.code === 'unauthorized' && !url.includes('/account/login') && !url.includes('/account/setup')) {
+    // 避免重复弹窗：5秒内只弹一次
+    if (!api.lastAuthPrompt || (Date.now() - api.lastAuthPrompt) > 5000) {
+      api.lastAuthPrompt = Date.now();
+      toast('<b>需要登录</b><span>请先登录再操作</span>', 'warn');
+      if (!loginModalShown) openLoginModal();
+    }
+  }
+  return data;
+}
+function fmtNum(n) {
+  if (n === null || n === undefined || n === '') return '-';
+  const v = Number(n);
+  if (isNaN(v)) return String(n);
+  if (v >= 10000) return (v/10000).toFixed(1).replace(/\.0$/,'') + '万';
+  return String(v);
+}
+function fmtDur(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60;
+  if (h>0) return `${h}时${m}分`;
+  if (m>0) return `${m}分${s}秒`;
+  return `${s}秒`;
+}
+function fmtTime(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts*1000);
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getMonth()+1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function fmtSize(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B','KB','MB','GB'];
+  let i = 0;
+  while (bytes >= 1024 && i < 3) { bytes /= 1024; i++; }
+  return bytes.toFixed(1) + ' ' + units[i];
+}
+function fmtFdTime(sec) {
+  if (!sec || sec <= 0) return '即将开奖';
+  if (sec < 60) return sec + 's';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m + '分' + (s < 10 ? '0' + s : s) + 's';
+}
+
+// 保留时长功能已移除，所有录制永久保存
+
+// 福袋倒计时更新（每秒执行，用 draw_time 与当前时间做差值）
+setInterval(() => {
+  const now = Math.floor(Date.now() / 1000);
+  document.querySelectorAll('.fd-time').forEach(el => {
+    const drawTime = parseInt(el.dataset.drawTime || '0');
+    if (drawTime > 0) {
+      const left = Math.max(0, drawTime - now);
+      el.textContent = fmtFdTime(left);
+      if (left <= 0) {
+        const badge = el.closest('.badge.fudai');
+        if (badge) badge.style.display = 'none';
+      }
+    }
+  });
+}, 1000);
+
+// ================= 自定义确认框（修复回调） =================
+function showConfirm(title, msg, okCallback) {
+  $('confirmTitle').innerHTML = title || '确认';
+  $('confirmMsg').innerHTML = msg || '确定执行此操作吗？';
+  confirmCallback = okCallback || null;
+  $('confirmMask').classList.add('show');
+  // 使用新的事件绑定方式，移除旧监听器
+  const okBtn = $('confirmOk');
+  const newOk = okBtn.cloneNode(true);
+  okBtn.parentNode.replaceChild(newOk, okBtn);
+  // 绑定点击事件
+  newOk.addEventListener('click', function(e) {
+    e.stopPropagation();
+    const cb = confirmCallback;
+    closeModal('confirmMask');
+    if (typeof cb === 'function') {
+      cb();
+      confirmCallback = null;
+    }
+  });
+}
+// 重写 closeModal 以清理回调
+const origClose = closeModal;
+closeModal = function(id) {
+  if (id === 'confirmMask') {
+    confirmCallback = null;
+  }
+  if (id === 'loginMask') {
+    loginModalShown = false;
+  }
+  origClose(id);
+};
+
+// ================= 渲染 =================
+function uptimeOf(s) {
+  const r = s.room || {};
+  const base = r.create_time || r.first_seen_live || 0;
+  return base ? Math.max(0, Date.now()/1000 - base) : 0;
+}
+
+function renderCard(s) {
+  const r = s.room || {};
+  const live = !!r.live;
+  const waiting = !s.web_rid && s.sec_uid;
+  const err = r.error || '';
+  const history = s.history_today || {};
+  const uidStr = s.unique_id ? '@' + s.unique_id : (s.sec_uid ? '主页ID' : '');
+  const pinned = s.pinned || 0;
+  const pinBtn = `<button class="btn sm ghost" onclick="togglePin('${esc(s.sec_uid||s.web_rid)}')" style="font-size:18px;line-height:1;padding:2px 6px;border:none;background:none;color:${pinned?'#facc15':'#64748b'};cursor:pointer" title="${pinned?'取消置顶':'置顶'}">${pinned?'⭐':'☆'}</button>`;
+
+  let badge = '';
+  if (live) badge = '<span class="badge live">● 直播中</span>';
+  else if (waiting) badge = '<span class="badge wait">待解析直播间号</span>';
+  else if (r.status === 4) badge = '<span class="badge off">已结束</span>';
+  else badge = '<span class="badge off">未开播</span>';
+  // 福袋 badge（含悬浮弹窗）
+  const fd = s.fudai || {};
+  const fdLucky = fd.lucky_count ? `${fd.lucky_count} 个名额` : '';
+  const fdCand = `/ ${fd.candidate_num || 0} 人参与`;
+  const fdConds = Array.isArray(fd.conditions) && fd.conditions.length
+    ? fd.conditions.filter(Boolean).map(c => `• ${esc(c)}`).join('<br>')
+    : '';
+  const fdName = fd.gift_name || '福袋';
+  const fudaiHtml = fd.has_fudai
+    ? `<span class="badge fudai" id="fdbadge_${esc(s.sec_uid||s.web_rid)}">
+        🎁 ${esc(fdName)} <span class="fd-time" data-draw-time="${fd.draw_time||0}">${fmtFdTime(Math.max(0, (fd.draw_time||0) - Math.floor(Date.now()/1000)))}</span>
+        <span class="fd-tip">
+          ${fdName ? `<div><span class="fd-label">🎁</span> ${esc(fdName)}</div>` : ''}
+          ${fdLucky ? `<div><span class="fd-label">👥</span> ${esc(fdLucky)} ${esc(fdCand)}</div>` : ''}
+          <div><span class="fd-label">⏱</span> 剩余 <span class="fd-time" data-draw-time="${fd.draw_time||0}">${fmtFdTime(Math.max(0, (fd.draw_time||0) - Math.floor(Date.now()/1000)))}</span></div>
+          ${fdConds ? `<div class="fd-conds"><span class="fd-label">📋</span><br>${fdConds}</div>` : ''}
+        </span>
+       </span>`
+    : '';
+
+  const cover = r.cover
+    ? `<img src="${esc(r.cover)}" loading="lazy" onerror="this.style.display='none'">`
+    : (s.avatar ? `<img src="${esc(s.avatar)}" onerror="this.style.display='none'">` : '<div class="ph">👤</div>');
+
+  const title = live
+    ? `<div class="title">${esc(r.title || '无标题')}</div>`
+    : (r.title ? `<div class="title none">「${esc(r.title)}」</div>` : '<div class="title none">暂未开播</div>');
+
+  const stats = live ? `
+    <div class="stats">
+      <span>👀 在线 <b>${esc(fmtNum(r.user_count))}</b></span>
+      <span>👍 点赞 <b>${esc(fmtNum(r.like_count))}</b></span>
+      <span>⏱ 已播 <b id="up_${esc(s.sec_uid||s.web_rid)}">${fmtDur(uptimeOf(s))}</b></span>
+    </div>` : `
+    <div class="stats">
+      <span>今日开播 <b>${history.today_count||0}</b> 次</span>
+      <span>累计 <b>${fmtDur(history.today_duration||0)}</b></span>
+      <span>上次 <b>${fmtTime(history.last_start)}</b></span>
+    </div>`;
+
+  const errBox = err ? `<div class="errbox">⚠ ${esc(err)}</div>` : '';
+
+  // 判断是否正在录制（使用 RECORDING_IDS）
+  const isRecording = RECORDING_IDS.has(s.sec_uid || s.web_rid);
+  let actions = '';
+  if (live) {
+    const recordBtn = isRecording
+      ? `<button class="btn sm danger" onclick="stopRecord('${esc(s.sec_uid||s.web_rid)}')">⏹ 停止录制</button>`
+      : `<button class="btn sm" onclick="startRecord('${esc(s.sec_uid||s.web_rid)}')">⏺ 录制</button>`;
+    actions = `
+      <button class="btn primary sm" onclick="playStreamer('${esc(s.sec_uid||s.web_rid)}')">▶ 播放</button>
+      ${recordBtn}
+      <button class="btn sm" onclick="showDetail('${esc(s.sec_uid||s.web_rid)}')">详情</button>
+      <button class="btn sm ghost" onclick="refreshOne('${esc(s.sec_uid||s.web_rid)}')">↻</button>
+      <button class="btn sm ghost danger" onclick="removeOne('${esc(s.sec_uid||s.web_rid)}')">✕</button>`;
+  } else {
+    actions = `
+      <button class="btn sm" onclick="showDetail('${esc(s.sec_uid||s.web_rid)}')">详情</button>
+      <button class="btn sm ghost" onclick="refreshOne('${esc(s.sec_uid||s.web_rid)}')">↻</button>
+      <button class="btn sm ghost danger" onclick="removeOne('${esc(s.sec_uid||s.web_rid)}')">✕</button>`;
+  }
+
+  return `
+  <div class="card ${live?'live':''}">
+    <div class="cover">
+      ${cover}
+      ${badge}
+      ${fudaiHtml}
+      ${live ? `<span class="livecount">👀 ${esc(fmtNum(r.user_count))} · 👍 ${esc(fmtNum(r.like_count))}</span>` : ''}
+    </div>
+    <div class="cardbody">
+      <div class="row1">
+        <div class="avatar">${s.avatar?`<img src="${esc(s.avatar)}" onerror="this.style.display='none'">`:'<div class="ph">👤</div>'}</div>
+        <div style="min-width:0;flex:1">
+          <div class="name">${esc(s.nickname || '未知名主播')}</div>
+          <div class="uid">${esc(uidStr)}</div>
+        </div>
+        ${pinBtn}
+      </div>
+      ${s.note ? `<div class="note">📌 ${esc(s.note)}</div>` : ''}
+      ${errBox}
+      ${title}
+      ${stats}
+      <div class="actions">${actions}</div>
+    </div>
+  </div>`;
+}
+
+/* ================= 骨架屏 ================= */
+function renderSkeletonCard() {
+  return `
+  <div class="sk-skeleton sk-fade-in">
+    <div class="sk-cover">
+      <div class="sk-badge sk-shimmer"></div>
+      <div class="sk-livecount sk-shimmer"></div>
+    </div>
+    <div class="sk-body">
+      <div class="sk-row">
+        <div class="sk-avatar sk-shimmer"></div>
+        <div style="flex:1">
+          <div class="sk-name sk-shimmer"></div>
+          <div class="sk-uid sk-shimmer"></div>
+        </div>
+      </div>
+      <div class="sk-title sk-shimmer"></div>
+      <div class="sk-title2 sk-shimmer"></div>
+      <div class="sk-stats">
+        <span class="sk-shimmer"></span>
+        <span class="sk-shimmer"></span>
+        <span class="sk-shimmer"></span>
+      </div>
+      <div class="sk-actions">
+        <div class="sk-btn sk-shimmer primary"></div>
+        <div class="sk-btn sk-shimmer"></div>
+        <div class="sk-btn sk-shimmer"></div>
+        <div class="sk-btn sk-shimmer"></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function showSkeleton(count) {
+  const grid = $('grid');
+  if (!grid) return;
+  count = Math.max(2, Math.min(count || 6, 20));
+  $('empty').style.display = 'none';
+  grid.innerHTML = Array.from({length: count}, renderSkeletonCard).join('');
+}
+
+function hideSkeleton() {
+  // 空操作 —— render() 会覆盖 grid 内容
+}
+
+/* ================= 状态栏筛选 ================= */
+let FILTER = 'all'; // all / online / offline
+
+function setFilter(f) {
+  FILTER = f;
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.filter === f);
+  });
+  render();
+}
+
+function getFilteredStreamers(list) {
+  if (FILTER === 'all') return list;
+  if (FILTER === 'online') return list.filter(s => s.room?.live === true);
+  if (FILTER === 'offline') return list.filter(s => s.room?.live !== true);
+  return list;
+}
+
+/* 福袋悬浮框：fixed 定位 + JS 计算位置。
+   关键：mouseenter 时把 tooltip 临时移动到 <body> 下（绕过 .card:hover transform
+   创建的 containing block 和 .card/.cover 的 overflow:hidden 裁剪），
+   mouseleave 时挪回原处。 */
+function initFudaiTooltip() {
+  document.querySelectorAll('.badge.fudai').forEach(badge => {
+    const tip = badge.querySelector('.fd-tip');
+    if (!tip || badge._fdBound) return;
+    badge._fdBound = true;
+    badge.addEventListener('mouseenter', function() {
+      const r = this.getBoundingClientRect();
+      const w = window.innerWidth;
+      let left = r.left + r.width / 2 - 90;
+      left = Math.max(8, Math.min(left, w - 200));
+      // 挪到 body 下，确保 containing block 是 viewport
+      document.body.appendChild(tip);
+      tip.style.left = left + 'px';
+      tip.style.top = (r.bottom + 10) + 'px';
+      tip.classList.add('show');
+    });
+    badge.addEventListener('mouseleave', function() {
+      tip.classList.remove('show');
+      this.appendChild(tip); // 挪回 badge 内，等待下次触发
+    });
+  });
+}
+
+function render() {
+  // 排序：置顶优先，直播中次之，最后按创建时间
+  STREAMERS.sort((a,b) => {
+    const pa = a.pinned || 0, pb = b.pinned || 0;
+    if (pa !== pb) return pb - pa;
+    const la = a.room?.live ? 1 : 0, lb = b.room?.live ? 1 : 0;
+    if (la !== lb) return lb - la;
+    return (a.created_at || 0) - (b.created_at || 0);
+  });
+
+  const grid = $('grid');
+  const filtered = getFilteredStreamers(STREAMERS);
+
+  // 缓存清理：移除已删除主播的缓存
+  const activeIds = new Set(STREAMERS.map(s => s.sec_uid || s.web_rid));
+  clearStaleCards(activeIds);
+
+  if (!STREAMERS.length) {
+    grid.innerHTML = '';
+    $('empty').style.display = 'block';
+  } else if (!filtered.length) {
+    grid.innerHTML = '';
+    $('empty').style.display = 'none';
+    $('filterCount').textContent = '（筛选后 0 个）';
+  } else {
+    $('empty').style.display = 'none';
+    // 增量 DOM 更新，避免封面重建闪烁
+    updateGridIncremental(grid, filtered, activeIds);
+    const total = STREAMERS.length;
+    if (total !== filtered.length) {
+      $('filterCount').textContent = `（${filtered.length}/${total}）`;
+    } else {
+      $('filterCount').textContent = '';
+    }
+  }
+  initFudaiTooltip();
+  $('srvDot').className = 'dot' + (STREAMERS.length ? '' : ' off');
+  $('srvText').textContent = STREAMERS.length + ' 个主播';
+  // 计算在线/离线数量
+  const online = STREAMERS.filter(s => s.room?.live === true).length;
+  const offline = STREAMERS.length - online;
+  $('onlineCount').textContent = online;
+  $('offlineCount').textContent = offline;
+  $('intervalText') && updateCountdown();
+  $('ffmpegText').textContent = window.HAS_FFMPEG ? '🎥 ffmpeg 可用' : '⚠ ffmpeg 未安装(录制降级为直存)';
+  $('lastRefresh').textContent = window.LAST_REFRESH ? fmtTime(window.LAST_REFRESH) : '-';
+  const sub = $('subInfo');
+  sub.textContent = '已连接' + (STREAMERS.length ? ` · ${STREAMERS.length} 个主播` : '');
+  const badge = $('recBadge');
+  const count = window.RECORDING_COUNT || 0;
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = 'inline';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+setInterval(() => {
+  STREAMERS.forEach(s => {
+    const r = s.room || {};
+    if (!r.live) return;
+    const el = $('up_' + (s.sec_uid||s.web_rid));
+    if (el) el.textContent = fmtDur(uptimeOf(s));
+  });
+  // 录制面板不再轮询,仅靠 init() 首次 + startRecord 启动时请求
+}, 1000);
+
+/* 对比主播数据是否变化（只关心影响卡片显示的字段） */
+function streamersChanged(newList, oldList) {
+  if (newList.length !== oldList.length) return true;
+  const oldMap = new Map();
+  for (const s of oldList) {
+    const id = s.sec_uid || s.web_rid;
+    oldMap.set(id, JSON.stringify({
+      live: s.room?.live,
+      title: s.room?.title,
+      user_count: s.room?.user_count,
+      like_count: s.room?.like_count,
+      uid: s.unique_id,
+      avatar: s.avatar,
+      nickname: s.nickname,
+      fudai: JSON.stringify(s.fudai || {}),
+      pinned: s.pinned,
+      note: s.note,
+    }));
+  }
+  for (const s of newList) {
+    const id = s.sec_uid || s.web_rid;
+    if (!oldMap.has(id)) return true;
+    const newKey = JSON.stringify({
+      live: s.room?.live,
+      title: s.room?.title,
+      user_count: s.room?.user_count,
+      like_count: s.room?.like_count,
+      uid: s.unique_id,
+      avatar: s.avatar,
+      nickname: s.nickname,
+      fudai: JSON.stringify(s.fudai || {}),
+      pinned: s.pinned,
+      note: s.note,
+    });
+    if (oldMap.get(id) !== newKey) return true;
+  }
+  return false;
+}
+
+/* ================= 增量 DOM 更新 ================= */
+function updateGridIncremental(grid, filtered, allActiveIds) {
+  // 清除骨架屏残留
+  grid.querySelectorAll('.sk-skeleton').forEach(el => el.remove());
+
+  // 建立 ID -> 现有卡片映射（包括隐藏的）
+  const existingCards = {};
+  grid.querySelectorAll('.card[data-id]').forEach(c => {
+    existingCards[c.dataset.id] = c;
+  });
+
+  const filteredIds = new Set(filtered.map(s => s.sec_uid || s.web_rid));
+
+  // 处理要显示的卡片
+  for (const s of filtered) {
+    const id = s.sec_uid || s.web_rid;
+    if (existingCards[id]) {
+      updateCardIncremental(existingCards[id], s);
+      existingCards[id].style.display = '';
+    } else {
+      // 新增卡片
+      const html = getRenderedCard(s);
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = html;
+      const newCard = wrapper.firstElementChild;
+      newCard.dataset.id = id;
+      existingCards[id] = newCard;
+      grid.appendChild(newCard);
+    }
+  }
+
+  // 隐藏不在当前筛选内的卡片（保留 DOM，切换筛选时复用），移除已删除的
+  for (const id in existingCards) {
+    if (!filteredIds.has(id)) {
+      if (allActiveIds.has(id)) {
+        existingCards[id].style.display = 'none';
+      } else {
+        existingCards[id].remove();
+        CARD_CACHE.delete(id);
+      }
+    }
+  }
+
+  // 排序：visible 卡片按最终顺序排列（appendChild 逐个移动，先 append 的越靠前）
+  const finalOrder = filtered.map(s => existingCards[s.sec_uid || s.web_rid]).filter(Boolean);
+  finalOrder.forEach(c => {
+    grid.appendChild(c);
+  });
+}
+
+// 增量更新单个卡片（只更新变化的字段，封面用预加载无感切换）
+function updateCardIncremental(card, s) {
+  const r = s.room || {};
+  const live = !!r.live;
+  const id = s.sec_uid || s.web_rid;
+
+  // 封面：预加载后无感切换
+  const coverSrc = r.cover || s.avatar;
+  const oldCoverSrc = card.dataset.coverSrc;
+  if (coverSrc && coverSrc !== oldCoverSrc) {
+    updateCoverAsync(card, coverSrc);
+    card.dataset.coverSrc = coverSrc;
+  }
+
+  // livecount 角标
+  if (live) {
+    let lc = card.querySelector('.livecount');
+    if (!lc) {
+      lc = document.createElement('span');
+      lc.className = 'livecount';
+      card.querySelector('.cover').appendChild(lc);
+    }
+    lc.textContent = `👀 ${esc(fmtNum(r.user_count))} · 👍 ${esc(fmtNum(r.like_count))}`;
+  } else {
+    const lc = card.querySelector('.livecount');
+    if (lc) lc.remove();
+  }
+
+  // 卡片 live 状态边框
+  card.classList.toggle('live', live);
+
+  // 标题
+  const titleEl = card.querySelector('.title');
+  if (titleEl) {
+    titleEl.textContent = live ? (r.title || '无标题') : (r.title ? ('「' + r.title + '」') : '暂未开播');
+    titleEl.className = 'title' + (live ? '' : ' none');
+  }
+
+  // 在线时长
+  const upEl = card.querySelector(`#up_${esc(id)}`);
+  if (upEl) upEl.textContent = fmtDur(uptimeOf(s));
+
+  // 统计区（live/offline 不同）
+  const statsEl = card.querySelector('.stats');
+  if (statsEl) {
+    const history = s.history_today || {};
+    if (live) {
+      statsEl.innerHTML = `
+        <span>👀 在线 <b>${esc(fmtNum(r.user_count))}</b></span>
+        <span>👍 点赞 <b>${esc(fmtNum(r.like_count))}</b></span>
+        <span>⏱ 已播 <b>${fmtDur(uptimeOf(s))}</b></span>`;
+    } else {
+      statsEl.innerHTML = `
+        <span>今日开播 <b>${history.today_count||0}</b> 次</span>
+        <span>累计 <b>${fmtDur(history.today_duration||0)}</b></span>
+        <span>上次 <b>${fmtTime(history.last_start)}</b></span>`;
+    }
+  }
+
+  // 主播昵称和 UID
+  const nameEl = card.querySelector('.name');
+  if (nameEl) nameEl.textContent = s.nickname || '未知名主播';
+  const uidEl = card.querySelector('.uid');
+  if (uidEl) uidEl.textContent = s.unique_id ? ('@' + s.unique_id) : (s.sec_uid ? '主页ID' : '');
+
+  // 福袋 badge（完整替换）
+  const oldFdBadge = card.querySelector('.badge.fudai');
+  const newFdHtml = (s.fudai && s.fudai.has_fudai) ? buildFudaiBadge(s) : '';
+  if (s.fudai && s.fudai.has_fudai && !oldFdBadge) {
+    // 新增福袋
+    card.querySelector('.cover').insertAdjacentHTML('beforeend', newFdHtml);
+  } else if (!s.fudai?.has_fudai && oldFdBadge) {
+    oldFdBadge.remove();
+  }
+
+  // 顶部状态 badge（直播中/未开播/已结束）
+  const badgeLive = card.querySelector('.badge.live, .badge.off, .badge.wait');
+  if (badgeLive) {
+    if (live) {
+      badgeLive.className = 'badge live';
+      badgeLive.textContent = '● 直播中';
+    } else if (!s.web_rid && s.sec_uid) {
+      badgeLive.className = 'badge wait';
+      badgeLive.textContent = '待解析直播间号';
+    } else if (r.status === 4) {
+      badgeLive.className = 'badge off';
+      badgeLive.textContent = '已结束';
+    } else {
+      badgeLive.className = 'badge off';
+      badgeLive.textContent = '未开播';
+    }
+  }
+}
+
+// 封面预加载后无感切换（旧图保持显示直到新图加载完成）
+function updateCoverAsync(card, newSrc) {
+  if (!newSrc) return;
+  const coverEl = card.querySelector('.cover');
+  if (!coverEl) return;
+  const oldImg = coverEl.querySelector('img');
+  // 预加载新图
+  const preload = new Image();
+  preload.onload = () => {
+    if (oldImg) {
+      // 新图已缓存，直接替换 src，浏览器瞬间渲染，无黑色间隙
+      oldImg.src = newSrc;
+    }
+  };
+  preload.src = newSrc;
+}
+
+// 生成福袋 badge HTML（供增量更新使用）
+function buildFudaiBadge(s) {
+  const fd = s.fudai || {};
+  const fdName = fd.gift_name || '福袋';
+  const fdLucky = fd.lucky_count ? `${fd.lucky_count} 个名额` : '';
+  const fdCand = `/ ${fd.candidate_num || 0} 人参与`;
+  const fdConds = Array.isArray(fd.conditions) && fd.conditions.length
+    ? fd.conditions.filter(Boolean).map(c => `• ${esc(c)}`).join('<br>')
+    : '';
+  return `<span class="badge fudai" id="fdbadge_${esc(s.sec_uid||s.web_rid)}">
+    🎁 ${esc(fdName)} <span class="fd-time" data-draw-time="${fd.draw_time||0}">${fmtFdTime(Math.max(0, (fd.draw_time||0) - Math.floor(Date.now()/1000)))}</span>
+    <span class="fd-tip">
+      ${fdName ? `<div><span class="fd-label">🎁</span> ${esc(fdName)}</div>` : ''}
+      ${fdLucky ? `<div><span class="fd-label">👥</span> ${esc(fdLucky)} ${esc(fdCand)}</div>` : ''}
+      <div><span class="fd-label">⏱</span> 剩余 <span class="fd-time" data-draw-time="${fd.draw_time||0}">${fmtFdTime(Math.max(0, (fd.draw_time||0) - Math.floor(Date.now()/1000)))}</span></div>
+      ${fdConds ? `<div class="fd-conds"><span class="fd-label">📋</span><br>${fdConds}</div>` : ''}
+    </span>
+  </span>`;
+}
+const CARD_CACHE = new Map(); // id -> {hash, html}
+function cardHash(s) {
+  const r = s.room || {};
+  return JSON.stringify({
+    live: r.live,
+    title: r.title,
+    cover: r.cover,
+    avatar: s.avatar,
+    nickname: s.nickname,
+    uid: s.unique_id,
+    user_count: r.user_count,
+    like_count: r.like_count,
+    fudai: JSON.stringify(s.fudai || {}),
+    pinned: s.pinned,
+    note: s.note,
+    create_time: r.create_time || r.first_seen_live,
+    updated_at: r.updated_at,
+  });
+}
+function getRenderedCard(s) {
+  const id = s.sec_uid || s.web_rid;
+  const h = cardHash(s);
+  const cached = CARD_CACHE.get(id);
+  if (cached && cached.hash === h) return cached.html;
+  const html = renderCard(s);
+  CARD_CACHE.set(id, {hash: h, html});
+  return html;
+}
+function clearStaleCards(ids) {
+  CARD_CACHE.forEach((_, id) => { if (!ids.has(id)) CARD_CACHE.delete(id); });
+}
+
+async function loadData() {
+  const d = await api('/api/streamers');
+  const newStreamers = d.streamers || [];
+  const changed = streamersChanged(newStreamers, STREAMERS);
+  STREAMERS = newStreamers;
+  // 配置不再随主播列表返回（config 为管理员专用接口），倒计时使用默认间隔
+  window.HAS_FFMPEG = d.has_ffmpeg;
+  window.LAST_REFRESH = d.last_refresh;
+  window.RECORDING_COUNT = d.recording_count || 0;
+  // 已移除角标显示
+  // 仅当主播数据实际变化时才重绘 DOM，减少无意义闪烁
+  if (changed) {
+    render();
+  }
+  // 录制面板由 1s setInterval 慢轮询(~每20s)和录制动作(start/stop)独立更新,
+  // 不随主播数据刷新重复拉取
+}
+
+// 更新自动刷新倒计时显示（固定两位数，1 秒显示 01）
+function updateCountdown() {
+  const el = $('intervalText');
+  if (!el) return;
+  el.textContent = countdown > 0 ? String(countdown).padStart(2, '0') : (CONFIG.interval ?? '-');
+}
+
+// 按配置的自动刷新间隔(10~3600s)启动动态倒计时：
+// 每秒递减，倒计时显示固定两位数(1秒显示01)；循环倒计时到 01 时自动请求直播列表接口并重置
+function restartAutoRefresh() {
+  if (pollTimer) clearInterval(pollTimer);
+  const iv = Math.max(10, CONFIG.interval || 60);
+  countdown = iv;
+  updateCountdown();
+  pollTimer = setInterval(() => {
+    countdown--;
+    if (countdown <= 1) {
+      loadData();     // 倒计时到 01 时自动请求直播列表接口
+      countdown = iv; // 重置，循环倒计时
+    }
+    updateCountdown();
+  }, 1000);
+}
+
+function toast(html, cls='') {
+  const d = document.createElement('div');
+  d.className = 'toast ' + cls;
+  d.innerHTML = html;
+  $('toasts').appendChild(d);
+  setTimeout(() => d.remove(), 5000);
+}
+
+// ================= 添加 =================
+let parseTimer = null;
+function debounceParse() { clearTimeout(parseTimer); parseTimer = setTimeout(parseInput, 400); }
+async function parseInput() {
+  const text = $('addText').value.trim();
+  const box = $('parseBox');
+  if (!text) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<span style="color:var(--dim)">解析中…</span>';
+  const r = await api('/api/parse?text=' + encodeURIComponent(text));
+  let h = '';
+  if (r.avatar || r.nickname) {
+    h += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">`;
+    if (r.avatar) h += `<img src="${esc(r.avatar)}" class="preview-avatar" onerror="this.style.display='none'">`;
+    if (r.nickname) h += `<span style="font-weight:600">${esc(r.nickname)}</span>`;
+    if (r.unique_id) h += `<span style="color:var(--dim);font-size:11px">(@${esc(r.unique_id)})</span>`;
+    h += `</div>`;
+  }
+  if (r.web_rid) h += `<div>🎯 直播间号: <b>${esc(r.web_rid)}</b></div>`;
+  if (r.sec_uid) h += `<div>👤 主播ID: <span style="font-size:10px">${esc(r.sec_uid)}</span></div>`;
+  if (r.room_id) h += `<div>🏠 房间ID: ${esc(r.room_id)}</div>`;
+  if (r.error) h += `<div style="color:#ff97a8;margin-top:4px">⚠ ${esc(r.error)}</div>`;
+  if (!r.web_rid && r.sec_uid) h += `<div style="color:#facc15;margin-top:4px">ℹ 只有主页链接: 将仅显示资料, 建议同时提供直播间链接</div>`;
+  box.innerHTML = h || '<span style="color:var(--dim)">无法识别该内容，请检查链接格式</span>';
+}
+async function doAdd() {
+  const text = $('addText').value.trim();
+  if (!text) return toast('<b>提示</b><span>请输入链接或ID</span>', 'warn');
+  const r = await api('/api/add', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text, note: $('addNote').value.trim()})});
+  if (r.ok) { toast(`<b>已添加</b><span>${esc(r.streamer?.nickname || '')}</span>`, 'ok'); closeModal('addMask'); $('addText').value=''; $('addNote').value=''; $('parseBox').style.display='none'; loadData(); }
+  else toast(`<b>添加失败</b><span>${esc(r.msg)}</span>`, 'warn');
+}
+function removeOne(id) {
+  showConfirm('删除确认', '确定要从监控列表中删除该主播吗？', function() {
+    api('/api/remove', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id})})
+      .then(r => { toast(`<b>${r.msg}</b>`, 'ok'); loadData(); });
+  });
+}
+function refreshAll() {
+  if (AUTH_USER && AUTH_USER.role === 'admin') {
+    api('/api/refresh');
+    toast('<b>刷新中</b><span>正在拉取所有主播状态…</span>');
+    showSkeleton(STREAMERS.length || 6);
+    setTimeout(loadData, 1500);
+  } else {
+    // 普通用户：仅重取自己的主播列表，不触发后端刷新
+    showSkeleton(STREAMERS.length || 6);
+    loadData();
+  }
+}
+function refreshOne(id) {
+  if (AUTH_USER && AUTH_USER.role === 'admin') {
+    api('/api/refresh?id=' + id).then(() => loadData());
+  } else {
+    loadData();
+  }
+}
+
+// ================= 播放 =================
+async function playStreamer(id) {
+  $('playerMask').classList.add('show');
+  $('playerTitle').textContent = '加载中…';
+  showPlayerMsg('加载中…', []);
+  const d = await api('/api/room?id=' + encodeURIComponent(id));
+  if (d.error) { showPlayerMsg('获取失败: ' + esc(d.error), []); return; }
+  currentDetail = d;
+  $('playerTitle').textContent = '▶ ' + (d.nickname || '') + (d.room?.live ? ' (直播中)' : ' (未开播)');
+  const streams = (d.room?.streams) || [];
+  if (!streams.length) {
+    showPlayerMsg('当前没有可用直播源<br>主播可能已下播或被风控', []);
+    return;
+  }
+  currentQuality = streams[0].key;
+  renderQuality();
+  retryCount = 0;
+  startPlayback();
+}
+function renderQuality() {
+  const streams = currentDetail?.room?.streams || [];
+  const bar = $('qualityBar2');
+  bar.innerHTML = streams.map(q =>
+    `<button class="qbtn ${q.key===currentQuality?'active':''}" onclick="switchQuality('${q.key}')">${esc(q.label)}</button>`).join('');
+}
+function switchQuality(k) { currentQuality = k; renderQuality(); retryCount = 0; startPlayback(); }
+function currentStream() {
+  return (currentDetail?.room?.streams || []).find(q => q.key === currentQuality) || null;
+}
+function destroyPlayer() {
+  if (hlsPlayer) { try { hlsPlayer.destroy(); } catch {} hlsPlayer = null; }
+  if (flvPlayer) { try { flvPlayer.destroy(); } catch {} flvPlayer = null; }
+  const v = $('video');
+  v.pause(); v.removeAttribute('src'); v.load();
+}
+function startPlayback() {
+  destroyPlayer();
+  const s = currentStream();
+  if (!s) return;
+  usingProxy = false;
+  const v = $('video');
+  $('playerMsg').style.display = 'none';
+  const url = s.hls || s.flv;
+  tryPlay(url, s);
+}
+async function tryPlay(url, s) {
+  const v = $('video');
+  if (s.hls && window.Hls && Hls.isSupported()) {
+    hlsPlayer = new Hls({liveDurationInfinity: true});
+    hlsPlayer.loadSource(url);
+    hlsPlayer.attachMedia(v);
+    hlsPlayer.on(Hls.Events.ERROR, (ev, data) => {
+      if (data.fatal) {
+        if (!usingProxy && retryCount < 2) { retryCount++; showPlayerMsg(`连接失败，重试 (${retryCount}/2)…`, []); setTimeout(() => playWithProxy(), 1000); }
+        else if (!usingProxy) { playWithProxy(); }
+        else showPlayerMsg('播放失败: ' + esc(data.type + '/' + data.details), []);
+      }
+    });
+    hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => { $('playerMsg').style.display = 'none'; });
+  } else if (s.flv && window.flvjs && flvjs.isSupported()) {
+    flvPlayer = flvjs.createPlayer({type:'flv', isLive:true, url}, {enableStashBuffer:false});
+    flvPlayer.attachMediaElement(v);
+    flvPlayer.load(); flvPlayer.play();
+    flvPlayer.on(flvjs.Events.ERROR, () => {
+      if (!usingProxy && retryCount < 2) { retryCount++; showPlayerMsg(`连接失败，重试 (${retryCount}/2)…`, []); setTimeout(() => playWithProxy(), 1000); }
+      else if (!usingProxy) { playWithProxy(); }
+      else showPlayerMsg('播放失败(FLV)', []);
+    });
+    flvPlayer.on(flvjs.Events.LOADING_COMPLETE, () => { $('playerMsg').style.display = 'none'; });
+  } else {
+    playWithProxy();
+  }
+}
+function playWithProxy() {
+  const s = currentStream();
+  if (!s) return;
+  usingProxy = true;
+  destroyPlayer();
+  const v = $('video');
+  const url = '/api/proxy?u=' + encodeURIComponent(s.hls || s.flv);
+  showPlayerMsg('正在通过本地代理播放…', []);
+  if (s.hls && window.Hls && Hls.isSupported()) {
+    hlsPlayer = new Hls({liveDurationInfinity: true});
+    hlsPlayer.loadSource(url);
+    hlsPlayer.attachMedia(v);
+    hlsPlayer.on(Hls.Events.ERROR, (ev, data) => { if (data.fatal) showPlayerMsg('代理播放失败', []); });
+    hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => { $('playerMsg').style.display = 'none'; });
+  } else if (s.flv && window.flvjs && flvjs.isSupported()) {
+    flvPlayer = flvjs.createPlayer({type:'flv', isLive:true, url}, {enableStashBuffer:false});
+    flvPlayer.attachMediaElement(v);
+    flvPlayer.load(); flvPlayer.play();
+    flvPlayer.on(flvjs.Events.ERROR, () => showPlayerMsg('代理播放失败(FLV)', []));
+    flvPlayer.on(flvjs.Events.LOADING_COMPLETE, () => { $('playerMsg').style.display = 'none'; });
+  } else {
+    v.src = url; v.play().catch(()=>{});
+  }
+}
+function retryPlay() { retryCount = 0; startPlayback(); }
+function showPlayerMsg(txt, streams) {
+  $('playerMsg').style.display = 'flex';
+  $('playerMsgText').innerHTML = txt;
+  $('qualityBar').innerHTML = (streams||[]).map(q =>
+    `<button class="qbtn" onclick="switchQuality('${q.key}')">${esc(q.label)}</button>`).join('');
+  const spinner = $('playerSpinner');
+  if (txt.includes('加载') || txt.includes('重试') || txt.includes('代理')) spinner.style.display = 'block';
+  else spinner.style.display = 'none';
+}
+function closePlayer() { destroyPlayer(); currentDetail = null; $('playerMask').classList.remove('show'); }
+function copyStream() {
+  const s = currentStream(); if (!s) return;
+  const url = s.hls || s.flv;
+  navigator.clipboard.writeText(url).then(() => toast('<b>已复制</b><span>直播源地址已复制到剪贴板</span>', 'ok'))
+    .catch(() => { prompt('复制直播源地址:', url); });
+}
+function playExternal() {
+  const s = currentStream(); if (!s) return;
+  const url = s.hls || s.flv;
+  api('/api/play?u=' + encodeURIComponent(url)).then(r => {
+    r.ok ? toast(`<b>已调用 ${esc(r.player)}</b><span>外部播放器已启动</span>`, 'ok')
+         : toast(`<b>外部播放失败</b><span>${esc(r.msg)}</span>`, 'warn');
+  });
+}
+function openLivePage() {
+  const rid = currentDetail?.web_rid || currentDetail?.room?.web_rid;
+  if (rid) window.open('https://live.douyin.com/' + rid);
+}
+
+// ================= 录制 =================
+async function startRecord(id) {
+  console.log('[录制] 开始录制请求，主播ID:', id);
+  const r = await api('/api/record', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id, action: 'start'})
+  });
+  if (r.ok) {
+    toast(`<b>开始录制</b><span>${esc(r.msg)}</span>`, 'ok');
+    // 立即添加到录制集合
+    RECORDING_IDS.add(id);
+    // 新录播启动:解锁 recordings 轮询
+    RECORDING_EMPTY = false;
+    // 重新渲染当前卡片（更新按钮）
+    render();
+    // 刷新录制面板
+    updateRecPanel(true);
+  } else {
+    toast('<b>无法录制</b><span>' + esc(r.msg) + '</span>', 'warn');
+  }
+}
+
+
+function stopRecord(id) {
+  console.log('[录制] 点击停止按钮，主播ID:', id);
+  showConfirm('停止录制', '确定停止当前录制任务吗？', function() {
+    console.log('[录制] 确认停止，发送请求...');
+    api('/api/record', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id, action: 'stop'})
+    }).then(r => {
+      console.log('[录制] 停止响应:', r);
+      if (r.ok) {
+        toast(`<b>${esc(r.msg)}</b>`, 'ok');
+        // 从录制集合中移除
+        RECORDING_IDS.delete(id);
+        // 重新渲染
+        render();
+        updateRecPanel(true);
+      } else {
+        toast('<b>停止失败</b><span>' + esc(r.msg) + '</span>', 'warn');
+      }
+    }).catch(err => {
+      console.error('[录制] 停止请求失败:', err);
+      toast('<b>停止失败</b><span>请查看控制台错误</span>', 'warn');
+    });
+  });
+}
+
+
+let RECORDS = [];
+let RECORDING_IDS = new Set();  // 用于快速判断是否在录制
+let RECORDING_EMPTY = true;     // 空锁
+let recPollTimer = null;        // 录制面板定时轮询（有数据时开启，没数据时停止）
+const REC_POLL_INTERVAL = 30000; // 30秒
+
+async function updateRecPanel(force) {
+  // 空锁:上次返回为空且没有新录播启动时,不再请求(force 强制刷新,用于页面首次加载 / 新录播启动)
+  if (!force && RECORDING_EMPTY) return;
+  const d = await api('/api/recordings');
+  RECORDS = d.records || [];
+  RECORDING_IDS = new Set(RECORDS.map(r => r.sec_uid));
+  const n = RECORDS.length;
+  $('recCount').textContent = n ? `(${n})` : '';
+  if (!n) {
+    $('recpanel').classList.remove('show');
+    RECORDING_EMPTY = true;
+    // 没数据 → 停止定时轮询
+    clearInterval(recPollTimer);
+    recPollTimer = null;
+    return;
+  }
+  $('recList').innerHTML = RECORDS.map(r => {
+    const fpEnc = encodeURIComponent(r.file_path || r.file || '');
+    const sec = esc(r.sec_uid);
+    const fid = 'r' + (r.sec_uid || r.web_rid).replace(/[^a-zA-Z0-9]/g, '');
+    return `<div class="recitem">
+      <div class="recmain">
+        <span class="rec-dot"></span>
+        <div class="recinfo">
+          <div class="recname">${esc(r.nickname)} <span class="rlbl">${esc(r.label||'')}</span></div>
+          <div class="recstats">
+            <span>⏱ ${fmtDur(r.duration)}</span><span class="sep">·</span>
+            <span>📦 ${fmtSize(r.size)}</span><span class="sep">·</span>
+            <span>${esc(r.method)}</span>
+          </div>
+        </div>
+      </div>
+      <div class="recaction">
+        <button class="recstop" onclick="stopRecord('${sec}')" title="停止录制">⏹</button>
+      </div>
+    </div>`;
+  }).join('');
+  window.RECORDING_COUNT = n;
+  RECORDING_EMPTY = false;
+  // 有数据 → 开启定时轮询（避免重复启动）
+  if (!recPollTimer) {
+    recPollTimer = setInterval(() => updateRecPanel(false), REC_POLL_INTERVAL);
+  }
+  const badge = $('recBadge');
+  if (n > 0) { badge.textContent = n; badge.style.display = 'inline'; }
+  else badge.style.display = 'none';
+}
+function toggleRecPanel() {
+  if (!RECORDS.length) {
+    $('recpanel').classList.remove('show');
+    toast('<b>暂无录制</b><span>当前没有主播正在录制</span>', 'warn');
+    return;
+  }
+  $('recpanel').classList.toggle('show');
+}
+function openRecDir() { api('/api/open_dir'); }
+
+function recordDownloadUrl(id) {
+  return '/api/record_download?id=' + encodeURIComponent(id);
+}
+
+// ================= 录制历史 =================
+async function showRecordHistory() {
+  $('historyMask').classList.add('show');
+  const body = $('historyBody');
+  body.innerHTML = '<div style="color:var(--dim)">加载中…</div>';
+  const d = await api('/api/record_history');
+  const history = d.history || [];
+  if (!history.length) {
+    body.innerHTML = '<div style="color:var(--dim);text-align:center;padding:20px">暂无录制历史</div>';
+    return;
+  }
+  let html = `<table>
+    <tr><th>主播</th><th>文件</th><th>时长</th><th>大小</th><th>方法</th><th>开始时间</th></tr>`;
+  history.forEach(h => {
+    const fname = h.file_path.split('/').pop() || h.file_path;
+    html += `<tr>
+      <td>${esc(h.nickname || h.sec_uid)}</td>
+      <td class="url" style="max-width:200px" title="${esc(h.file_path)}">${esc(fname)}</td>
+      <td>${fmtDur(h.duration)}</td>
+      <td>${fmtSize(h.size)}</td>
+      <td>${esc(h.method)}</td>
+      <td>${fmtTime(h.start_time)}</td>
+    </tr>`;
+  });
+  html += '</table>';
+  body.innerHTML = html;
+}
+
+// ================= 详情 =================
+async function showDetail(id) {
+  $('detailMask').classList.add('show');
+  const d = await api('/api/room?id=' + encodeURIComponent(id));
+  if (d.error) { $('detailTitle').textContent = '错误'; $('tabStreams').innerHTML = '<p>' + esc(d.error) + '</p>'; return; }
+  currentDetail = d;
+  $('detailTitle').textContent = (d.nickname || '') + ' 的详情';
+  const streams = d.room?.streams || [];
+  $('tabStreams').innerHTML = streams.length ? `
+    <table>
+      <tr><th>清晰度</th><th>FLV 地址</th><th>HLS 地址</th></tr>
+      ${streams.map(q => `<tr>
+        <td>${esc(q.label)}</td>
+        <td class="url">${q.flv ? `<div style="display:flex;gap:6px;align-items:flex-start"><span style="flex:1;word-break:break-all">${esc(q.flv)}</span><button class="copybtn" onclick="copyText(this,'${esc(q.flv)}')">复制</button></div>` : '-'}</td>
+        <td class="url">${q.hls ? `<div style="display:flex;gap:6px;align-items:flex-start"><span style="flex:1;word-break:break-all">${esc(q.hls)}</span><button class="copybtn" onclick="copyText(this,'${esc(q.hls)}')">复制</button></div>` : '-'}</td>
+      </tr>`).join('')}
+    </table>
+    <div class="hint">⚠ 直播源地址有时效(通常几小时), 失效后请点击「刷新」重新获取。</div>` : '<div class="hint">当前没有直播源(未开播或被风控)</div>';
+
+  const q = d.room?.streams?.find(x => x.hls || x.flv);
+  $('tabCmds').innerHTML = q ? `
+    <table>
+      <tr><th>播放器</th><th>命令</th></tr>
+      <tr><td>mpv / ffplay</td><td class="url" style="font-family:monospace">mpv "${esc(q.hls || q.flv)}"</td></tr>
+      <tr><td>PotPlayer</td><td class="url" style="font-family:monospace">potplayer "${esc(q.hls || q.flv)}"</td></tr>
+      <tr><td>ffmpeg 录制</td><td class="url" style="font-family:monospace">ffmpeg -i "${esc(q.hls || q.flv)}" -c copy out.flv</td></tr>
+    </table>` : '<div class="hint">暂无直播源</div>';
+
+  const h = d.history_today || {};
+  $('tabHistory').innerHTML = `
+    <table>
+      <tr><th>今日开播</th><td>${h.today_count||0} 次</td></tr>
+      <tr><th>今日累计时长</th><td>${fmtDur(h.today_duration||0)}</td></tr>
+      <tr><th>最近开播</th><td>${fmtTime(h.last_start)}</td></tr>
+      <tr><th>直播间号</th><td>${esc(d.web_rid||'-')}</td></tr>
+      <tr><th>主播ID</th><td style="font-size:10px">${esc(d.sec_uid||'-')}</td></tr>
+    </table>
+    <div class="hint">开播历史存储于 SQLite 数据库。</div>`;
+
+  $('tabRecords').innerHTML = '<div class="hint">加载录播记录中…</div>';
+  const recData = await api('/api/record_history');
+  const sid = d.sec_uid || '';
+  const rid = d.web_rid || '';
+  const records = (recData.history || []).filter(x =>
+    (sid && x.sec_uid === sid) || (rid && x.web_rid === rid)
+  );
+  $('tabRecords').innerHTML = records.length ? `
+    <table>
+      <tr><th>文件</th><th>时长</th><th>大小</th><th>清晰度</th><th>开始时间</th><th>操作</th></tr>
+      ${records.map(r => {
+        const fname = (r.file_path || '').split('/').pop() || r.file_path || '-';
+        const url = recordDownloadUrl(r.id);
+        const actions = r.exists
+          ? `<a class="copybtn" href="${esc(url)}">下载</a>
+             <button class="copybtn" onclick="copyText(this, location.origin + '${esc(url)}')">复制链接</button>`
+          : '<span style="color:var(--dim)">文件不存在</span>';
+        return `<tr>
+          <td class="url" title="${esc(r.file_path)}">${esc(fname)}</td>
+          <td>${fmtDur(r.duration || 0)}</td>
+          <td>${fmtSize(r.size || 0)}</td>
+          <td>${esc(r.label || '-')}</td>
+          <td>${fmtTime(r.start_time)}</td>
+          <td style="white-space:nowrap">${actions}</td>
+        </tr>`;
+      }).join('')}
+    </table>
+    <div class="hint">下载链接来自本机服务；关闭监控程序后链接不可访问。</div>` : '<div class="hint">该主播暂无录播记录。</div>';
+
+  // 主播设置
+  const fe = d.fudai_enabled !== undefined ? d.fudai_enabled : 1;
+  $('detFudaiEnabled').checked = fe !== 0;
+}
+
+// 切换福袋监测开关
+async function toggleFudaiEnabled() {
+  const enabled = $('detFudaiEnabled').checked ? 1 : 0;
+  const sec_uid = currentDetail?.sec_uid || currentDetail?.web_rid || '';
+  if (!sec_uid) { toast('<b>无法切换</b><span>主播 ID 不存在</span>', 'err'); return; }
+  try {
+    const r = await api('/api/update', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({sec_uid, fudai_enabled: enabled})
+    });
+    if (!r.ok) { toast('<b>保存失败</b><span>' + esc(r.msg||'未知错误') + '</span>', 'err'); $('detFudaiEnabled').checked = !enabled; return; }
+    // 更新本地数据
+    const s = STREAMERS.find(x => (x.sec_uid||x.web_rid) === sec_uid);
+    if (s) s.fudai_enabled = enabled;
+    currentDetail.fudai_enabled = enabled;
+    toast(enabled ? '<b>福袋监测已启用</b><span>下次刷新将开始检测</span>' : '<b>福袋监测已关闭</b><span>该主播福袋将不再检测</span>', 'ok');
+    loadData();
+  } catch (e) {
+    toast('<b>保存失败</b><span>' + esc(e.message) + '</span>', 'err');
+    $('detFudaiEnabled').checked = !enabled;
+  }
+}
+
+function copyText(btn, txt) {
+  navigator.clipboard.writeText(txt).then(() => { btn.textContent = '✓ 已复制'; setTimeout(()=>btn.textContent='复制', 1200); })
+    .catch(() => prompt('复制:', txt));
+}
+function tab(el, id) {
+  el.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  el.parentElement.parentElement.querySelectorAll('.tabpage').forEach(p => p.classList.remove('active'));
+  $(id).classList.add('active');
+  if (id === 'tabLog') {
+    const sec_uid = currentDetail?.sec_uid || currentDetail?.web_rid || '';
+    loadLogs(sec_uid);
+  }
+}
+async function loadLogs(sec_uid) {
+  const qs = sec_uid ? `?sec_uid=${encodeURIComponent(sec_uid)}` : '';
+  const d = await api('/api/logs' + qs);
+  const streamerNickname = {};
+  STREAMERS.forEach(s => { streamerNickname[s.sec_uid] = s.nickname; streamerNickname[s.web_rid] = s.nickname; });
+  const logList = $('logList');
+  if (!logList) return;
+  logList.innerHTML = (d.logs||[]).slice().reverse().map(l => {
+    const st = l.sec_uid ? (streamerNickname[l.sec_uid] || l.sec_uid) : null;
+    const tag = st ? `<span class="log-streamer">${esc(st)}</span>` : '<span class="log-sys">系统</span>';
+    return `<div class="logitem"><span>${fmtTime(l.ts)}</span><span class="lv-${esc(l.level)}">[${esc(l.level)}]</span>${tag}<span class="log-msg">${esc(l.msg)}</span></div>`;
+  }).join('') || '<div class="hint">暂无日志</div>';
+}
+
+async function togglePin(id) {
+  const r = await api('/api/pin', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({id})
+  });
+  if (r.ok) {
+    // 更新本地数据
+    const s = STREAMERS.find(x => (x.sec_uid||x.web_rid) === id);
+    if (s) s.pinned = r.pinned;
+    render(); // 重新渲染以更新星标和排序
+  } else {
+    toast('<b>切换置顶失败</b><span>' + esc(r.msg) + '</span>', 'warn');
+  }
+}
+
+// ================= 杂项 =================
+function openAdd() {
+  $('addMask').classList.add('show');
+  setTimeout(() => $('addText').focus(), 50);
+}
+function closeModal(id) { $(id).classList.remove('show'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePlayer(); ['addMask','detailMask','confirmMask','historyMask','squareMask'].forEach(closeModal); } });
+document.querySelectorAll('.modal-mask').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); }));
+
+// ================= 直播广场 =================
+function openSquarePanel() {
+  $('squareMask').classList.add('show');
+  loadSquareHot();
+}
+async function loadSquareHot() {
+  _sqHasMore = false; cancelSquareAutoLoad();
+  const bar = $('squareCategoryBar'); if (bar) bar.style.display = 'none';
+  const body = $('squareBody');
+  body.innerHTML = '加载热搜榜…';
+  const d = await api('/api/square/hot');
+  if (!d.ok) { body.innerHTML = `<div style="color:#f87171">${esc(d.msg)}</div>`; return; }
+  const list = d.list || [];
+  if (!list.length) { body.innerHTML = '<div>暂无热搜数据</div>'; return; }
+  // 新标签打开抖音搜索（直播分类）
+  const openSearch = w => `window.open('https://www.douyin.com/search/${encodeURIComponent(w).replace(/'/g, '%27')}?type=live','_blank')`;
+  const rankBadge = i => {
+    if (i === 0) return '<span style="display:inline-block;min-width:24px;text-align:center;background:linear-gradient(135deg,#f6c945,#e8961b);color:#fff;border-radius:6px;font-weight:700;font-size:12px;padding:2px 6px">1</span>';
+    if (i === 1) return '<span style="display:inline-block;min-width:24px;text-align:center;background:linear-gradient(135deg,#d7dbe3,#9aa2b1);color:#fff;border-radius:6px;font-weight:700;font-size:12px;padding:2px 6px">2</span>';
+    if (i === 2) return '<span style="display:inline-block;min-width:24px;text-align:center;background:linear-gradient(135deg,#e8a878,#c47a3f);color:#fff;border-radius:6px;font-weight:700;font-size:12px;padding:2px 6px">3</span>';
+    return `<span style="display:inline-block;min-width:24px;text-align:center;color:var(--dim);font-weight:600">${i+1}</span>`;
+  };
+  const tag = w => {
+    // 热搜标签：inline-block 独立盒模型，避免底部边框被父级 overflow:hidden 裁剪
+    const tb = (c) => `<span style="display:inline-block;font-size:10px;line-height:14px;color:${c};border:1px solid ${c};border-radius:4px;padding:0 4px;margin-left:6px;vertical-align:middle">`;
+    if (w.label === '热') return tb('#f87171') + '热</span>';
+    if (w.label === '新') return tb('#60a5fa') + '新</span>';
+    if (w.label === '荐') return tb('#f6c945') + '荐</span>';
+    if (w.label === '沸') return tb('#f472b6') + '沸</span>';
+    if (w.label === '爆') return tb('#f97316') + '爆</span>';
+    return '';
+  };
+  let html = '<div style="font-size:12px;color:var(--dim);margin-bottom:10px">点击热搜词或「搜直播」可在新标签页直接搜索</div>';
+  html += '<div style="border:1px solid var(--line,#2a3350);border-radius:10px;overflow:hidden">';
+  list.forEach((w, i) => {
+    html += `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;${i%2?'background:rgba(255,255,255,.02)':''};border-top:${i?`1px solid var(--line,#2a3350)`:''};transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='${i%2?'rgba(255,255,255,.02)':'transparent'}'">
+      ${rankBadge(i)}
+      <a href="javascript:void(0)" onclick="${openSearch(w.word)}" style="flex:1;color:var(--txt,#e6e9f0);font-weight:600;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(w.word)}">${esc(w.word)}${tag(w)}</a>
+      <span style="font-size:11px;color:var(--dim);white-space:nowrap">🔥 ${fmtNum(w.hot_value)}</span>
+      <button class="btn sm" onclick="${openSearch(w.word)}">搜直播</button>
+    </div>`;
+  });
+  html += '</div>';
+  body.innerHTML = html;
+}
+async function searchSquareLive(keyword) {
+  keyword = (keyword ?? $('squareKeyword').value).trim();
+  if (!keyword) return toast('<b>提示</b><span>请输入关键词</span>', 'warn');
+  $('squareKeyword').value = keyword;
+  _sqHasMore = false; cancelSquareAutoLoad();
+  const bar = $('squareCategoryBar'); if (bar) bar.style.display = 'none';
+  const body = $('squareBody');
+  body.innerHTML = `正在搜索「${esc(keyword)}」…`;
+  const d = await api('/api/square/search?keyword=' + encodeURIComponent(keyword));
+  if (!d.ok) { body.innerHTML = `<div style="color:#f87171">${esc(d.msg)}</div>`; return; }
+  const list = d.list || [];
+  if (!list.length) { body.innerHTML = '<div>未找到相关直播间</div>'; return; }
+  renderSquareLives(list, `找到 ${list.length} 个直播间，点击「添加」可直接加入监控`);
+}
+// 推荐直播：使用 square_feed_url（从浏览器 live.douyin.com 首页 Network 复制 webcast/feed 请求）
+async function loadSquareFeed() {
+  _sqHasMore = false; cancelSquareAutoLoad();
+  const bar = $('squareCategoryBar'); if (bar) bar.style.display = 'none';
+  const body = $('squareBody');
+  body.innerHTML = '加载推荐直播…';
+  const d = await api('/api/square/feed');
+  if (!d.ok) { body.innerHTML = `<div style="color:#f87171">${esc(d.msg)}</div>`; return; }
+  const list = d.list || [];
+  if (!list.length) { body.innerHTML = '<div>暂无推荐直播（请先在 设置→广场 中配置 feed URL）</div>'; return; }
+  renderSquareLives(list, `推荐 ${list.length} 个直播间，点击「添加」可直接加入监控`);
+}
+// 分类查看：固定悬浮分类条（一行横向滚动 + 搜索）+ 滑到底部倒计时 3s 自动加载更多
+let _sqPid = 0;           // 当前分区 ID
+let _sqOffset = 0;        // 已加载到的 offset
+let _sqRooms = [];        // 已累计的房间列表
+let _sqName = '';         // 当前分区名
+let _sqPartitions = [];   // 分区列表（供搜索过滤）
+let _sqHasMore = false;   // 当前是否还有更多可加载
+let _sqAutoLoading = false; // 是否正在自动加载
+let _sqAutoTimer = null;  // 自动加载倒计时 timer
+let _sqAutoCount = 0;     // 倒计时剩余秒数
+let _sqScrollBound = false; // squareBody 滚动监听是否已绑定
+// 绑定 squareBody 滚动监听（惰性绑定：弹窗 DOM 存在后才绑定）
+function bindSquareScroll() {
+  if (_sqScrollBound) return;
+  const body = $('squareBody');
+  if (!body) return;
+  body.addEventListener('scroll', squareAutoLoadCheck);
+  _sqScrollBound = true;
+}
+// 滑到底部 → 3 秒倒计时 → 自动加载更多；离开底部则取消
+function squareAutoLoadCheck() {
+  const body = $('squareBody');
+  if (!body || !_sqHasMore || _sqAutoLoading) return;
+  const nearBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 40;
+  if (!nearBottom) { cancelSquareAutoLoad(); return; }
+  if (_sqAutoTimer) return;
+  _sqAutoCount = 3;
+  const foot = $('squareLoadMore');
+  if (foot) foot.innerHTML = `<div style="text-align:center"><span style="color:var(--dim)">${_sqAutoCount} 秒后自动加载更多…</span> <button class="btn sm" onclick="cancelSquareAutoLoad()">取消</button></div>`;
+  _sqAutoTimer = setInterval(() => {
+    _sqAutoCount--;
+    const f = $('squareLoadMore');
+    if (_sqAutoCount > 0 && f) f.innerHTML = `<div style="text-align:center"><span style="color:var(--dim)">${_sqAutoCount} 秒后自动加载更多…</span> <button class="btn sm" onclick="cancelSquareAutoLoad()">取消</button></div>`;
+    if (_sqAutoCount <= 0) {
+      clearInterval(_sqAutoTimer); _sqAutoTimer = null;
+      loadSquarePartitionRooms(_sqPid, _sqOffset, true, _sqName);
+    }
+  }, 1000);
+}
+function cancelSquareAutoLoad() {
+  if (_sqAutoTimer) { clearInterval(_sqAutoTimer); _sqAutoTimer = null; }
+  _sqAutoCount = 0;
+  if (!_sqHasMore || _sqAutoLoading) return;
+  const foot = $('squareLoadMore');
+  if (foot) foot.innerHTML = '<button class="btn" style="width:100%" onclick="loadSquarePartitionRooms(_sqPid,_sqOffset,true)">⬇️ 加载更多</button>';
+}
+// 渲染固定悬浮分类条（一行，横向滚动），支持关键词过滤；type=4 为 8 大类（cat4 样式）
+function renderSquareCatBar(parts, kw) {
+  const wrap = $('squareCatList');
+  if (!wrap) return;
+  let html = '';
+  parts.forEach(p => {
+    const name = p.name || '';
+    if (kw && name.indexOf(kw) < 0 && String(p.id).indexOf(kw) < 0) return;
+    const active = _sqPid === p.id;
+    const cls = active ? 'primary' : (p.type === 4 ? 'cat4' : '');
+    html += `<button class="btn sm ${cls}" onclick="loadSquarePartitionRooms(${p.id},0,false,'${esc(name.replace(/'/g,"\\'"))}')" style="margin:0;flex:0 0 auto" title="${p.type===4?'大类':'游戏分区'}">${esc(name)}</button>`;
+  });
+  wrap.innerHTML = html;
+}
+function filterSquareCats(kw) {
+  renderSquareCatBar(_sqPartitions, (kw || '').trim());
+}
+// 分类条左右按钮切换（无滚动条，按屏宽平滑滚动）
+function squareCatScroll(dir) {
+  const wrap = $('squareCatList');
+  if (!wrap) return;
+  wrap.scrollBy({left: (dir > 0 ? 1 : -1) * Math.max(120, wrap.clientWidth * 0.75), behavior: 'smooth'});
+}
+async function loadSquarePartitions() {
+  bindSquareScroll();
+  const body = $('squareBody');
+  const bar = $('squareCategoryBar');
+  body.innerHTML = '加载分类…';
+  const d = await api('/api/square/partitions');
+  if (!d.ok) { body.innerHTML = `<div style="color:#f87171">${esc(d.msg)}</div>`; return; }
+  const parts = d.partitions || [];
+  if (!parts.length) { body.innerHTML = '<div>暂无分类数据</div>'; return; }
+  _sqPartitions = parts;
+  const search = $('squareCatSearch');
+  if (search) search.value = '';
+  renderSquareCatBar(parts, '');
+  if (bar) bar.style.display = 'block';
+  body.innerHTML = '<div style="padding:20px;text-align:center">加载分类直播…</div>';
+  loadSquarePartitionRooms(parts[0].id, 0, false, parts[0].name);
+}
+async function loadSquarePartitionRooms(pid, offset, append, name) {
+  const body = $('squareBody');
+  _sqPid = pid;
+  _sqOffset = offset;
+  _sqName = name || '';
+  if (!append) {
+    cancelSquareAutoLoad();
+    _sqRooms = [];
+    _sqHasMore = false;
+    body.innerHTML = `加载「${esc(_sqName || pid)}」分类…`;
+  } else {
+    _sqAutoLoading = true;
+    const foot = $('squareLoadMore');
+    if (foot) foot.innerHTML = '加载中…';
+  }
+  // 高亮当前分类（分类条显示时）
+  const search = $('squareCatSearch');
+  const bar = $('squareCategoryBar');
+  if (search && bar && bar.style.display !== 'none') renderSquareCatBar(_sqPartitions, search.value.trim());
+  // 8 大类（type=4）无分区 room 接口，走 categorynew 分类页 SSR 抓取
+  const cat = _sqPartitions.find(p => p.id === pid);
+  const isCat4 = (cat && cat.type === 4) || (pid >= 101 && pid <= 108);
+  const url = isCat4
+    ? `/api/square/categorynew?type=4&id=${pid}`
+    : `/api/square/partition?pid=${pid}&offset=${_sqOffset}&count=20`;
+  const d = await api(url);
+  _sqAutoLoading = false;
+  if (!d.ok) {
+    if (!append) body.innerHTML = `<div style="color:#f87171">${esc(d.msg)}</div>`;
+    else { const foot = $('squareLoadMore'); if (foot) foot.innerHTML = '<button class="btn" style="width:100%" onclick="loadSquarePartitionRooms(_sqPid,_sqOffset,true)">🔄 重试</button>'; }
+    return;
+  }
+  const list = d.list || [];
+  if (!append) {
+    if (!list.length) { body.innerHTML = `<div>「${esc(_sqName || pid)}」分类暂无直播</div>`; return; }
+    _sqRooms = list;
+  } else {
+    const seen = new Set(_sqRooms.map(r => r.web_rid));
+    const fresh = list.filter(r => !seen.has(r.web_rid));
+    _sqRooms = _sqRooms.concat(fresh);
+    if (!fresh.length) _sqHasMore = false; // 无新数据则停止
+  }
+  _sqOffset = d.offset || (_sqOffset + list.length);
+  _sqHasMore = !!(d.has_more || list.length >= 20);
+  renderSquareLives(_sqRooms, `「${esc(_sqName || pid)}」分类 · ${_sqRooms.length} 个直播间（点击「添加」可加入监控）`);
+  if (_sqHasMore) {
+    const foot = $('squareLoadMore');
+    if (foot) foot.innerHTML = '<div style="text-align:center;color:var(--dim)">— 继续下滑自动加载更多 —</div>';
+    // 加载后仍处于底部则直接进入下一轮倒计时
+    if (body.scrollTop + body.clientHeight >= body.scrollHeight - 40) squareAutoLoadCheck();
+  } else {
+    const foot = $('squareLoadMore');
+    if (foot) foot.innerHTML = '<div style="text-align:center;color:var(--dim)">— 已全部加载 —</div>';
+  }
+}
+// 通用直播间卡片渲染（搜索/推荐/分类共用），重渲染后恢复滚动位置
+function renderSquareLives(list, header) {
+  const body = $('squareBody');
+  const st = body.scrollTop;
+  let html = `<div style="font-size:12px;color:var(--dim);margin-bottom:10px">${header}</div>`;
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px">';
+  list.forEach(r => {
+    const cover = r.cover || r.avatar || '';
+    html += `<div style="border:1px solid var(--line,#2a3350);border-radius:10px;overflow:hidden;background:#1a2238">
+      ${cover ? `<img src="${esc(cover)}" loading="lazy" style="width:100%;height:110px;object-fit:cover;display:block" onerror="this.style.display='none'">` : ''}
+      <div style="padding:8px 10px">
+        <div style="font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.title)}">${esc(r.title) || '（无标题）'}</div>
+        <div style="margin:4px 0;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim)">
+          <span>👤 ${esc(r.nickname) || '-'}</span>
+          ${r.live ? '<span style="color:#ff3b5c">● 直播中</span>' : ''}
+          ${r.user_count ? `<span>👀 ${esc(r.user_count)}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn sm" onclick="addSquareRoom('${esc(r.web_rid)}')">➕ 添加</button>
+          <button class="btn sm ghost" onclick="window.open('https://live.douyin.com/${esc(r.web_rid)}','_blank')">去直播间</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  html += '<div id="squareLoadMore" style="margin-top:10px"></div>';
+  body.innerHTML = html;
+  body.scrollTop = st;
+}
+async function addSquareRoom(webRid) {
+  if (!webRid) return toast('<b>无法添加</b><span>该直播间缺少 web_rid</span>', 'warn');
+  const res = await api('/api/add', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text: 'https://live.douyin.com/' + webRid})});
+  if (res.ok) { toast(`<b>已添加</b><span>${esc(res.streamer?.nickname || webRid)}</span>`, 'ok'); loadData(); }
+  else toast(`<b>添加失败</b><span>${esc(res.msg)}</span>`, 'warn');
+}
+
+// ================= 启动 =================
+(async function init() {
+  // 立即显示骨架屏，避免白屏
+  showSkeleton(6);
+  // 先检查登录状态：游客仅显示广场与游客面板，登录后才加载监控
+  try { await checkAuth(); } catch(e) { console.error(e); }
+  if (!AUTH_USER) {
+    return; // 游客态界面已由 updateAuthUI/applyAccessMode 处理
+  }
+  try {
+    await loadData();
+  } catch(e) {
+    console.error(e);
+  }
+  render();  // 兜底:确保骨架屏被替换(首次加载可能 changed=false 不触发渲染)
+  // 首次请求 recordings:有数据就开启定时轮询,没数据则不请求
+  updateRecPanel(true).catch(()=>{});
+  // 初始化完成后设置自动刷新（间隔遵循配置 10~3600 秒，无感刷新）
+  if (window.Notification && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+    Notification.requestPermission();
+  }
+  restartAutoRefresh();
+})();
+
+// ================= 账号登录系统 =================
+
+// 检查登录状态
+async function checkAuth() {
+  try {
+    const r = await api('/api/account/status');
+    if (!r.ok) return;
+    HAS_ACCOUNTS = r.has_accounts || false;
+    if (r.logged_in && r.user) {
+      AUTH_USER = r.user;
+      updateAuthUI(true, r.user);
+    } else {
+      AUTH_USER = null;
+      updateAuthUI(false, null);
+    }
+  } catch (e) {
+    // 忽略，服务端可能尚未启动
+  }
+}
+
+// 游客/登录访问模式切换：游客仅显示广场与游客面板，隐藏监控操作与主体
+function applyAccessMode(loggedIn) {
+  ['addBtn', 'refreshBtn', 'statusbar', 'grid'].forEach(id => {
+    const el = $(id);
+    if (el) el.style.display = loggedIn ? '' : 'none';
+  });
+  // 录制功能仅管理员可见
+  const recBtn = $('recToggle');
+  if (recBtn) {
+    recBtn.style.display = (loggedIn && AUTH_USER && AUTH_USER.role === 'admin') ? '' : 'none';
+  }
+  const empty = $('empty');
+  if (empty) empty.style.display = 'none';  // 空态提示由 render 控制
+  const guest = $('guestPanel');
+  if (guest) guest.style.display = loggedIn ? 'none' : 'flex';
+  const boot = $('bootLoading');
+  if (boot) boot.style.display = 'none';  // 认证完成，移除启动占位
+}
+
+// 更新登录 UI
+function updateAuthUI(loggedIn, user) {
+  const status = $('authStatus');
+  const adminBtn = $('adminBtn');
+  // 管理按钮仅管理员可见
+  if (adminBtn) {
+    adminBtn.style.display = (loggedIn && user && user.role === 'admin') ? '' : 'none';
+  }
+  // 游客态：隐藏监控操作与主体，显示游客面板
+  applyAccessMode(loggedIn);
+  if (!status) return;
+  if (loggedIn && user) {
+    status.innerHTML = `<span class="auth-logged-in">👤 ${esc(user.username)} (${esc(user.role)})</span>
+      <button class="btn sm ghost" onclick="doLogout()" style="margin-left:8px;padding:2px 8px">退出</button>`;
+    status.style.display = 'flex';
+    status.style.alignItems = 'center';
+  } else if (HAS_ACCOUNTS) {
+    status.innerHTML = `<span style="color:var(--dim);font-size:12px">未登录</span>
+      <button class="btn sm" onclick="openLoginModal()" style="margin-left:8px;padding:2px 8px;font-size:11px">登录</button>`;
+    status.style.display = 'flex';
+    status.style.alignItems = 'center';
+  } else {
+    status.innerHTML = `<span style="color:var(--dim);font-size:12px">未设置账号</span>
+      <button class="btn sm" onclick="openSetupModal()" style="margin-left:8px;padding:2px 8px;font-size:11px">设置账号</button>`;
+    status.style.display = 'flex';
+    status.style.alignItems = 'center';
+  }
+}
+
+// 获取带认证的请求头
+function authHeaders(extra) {
+  const h = Object.assign({'Content-Type': 'application/json'}, extra || {});
+  if (AUTH_TOKEN) h['Authorization'] = 'Bearer ' + AUTH_TOKEN;
+  return h;
+}
+
+// 打开登录弹窗
+function openLoginModal() {
+  closeModal('regMask');
+  loginModalShown = true;
+  $('loginError').textContent = '';
+  $('loginForm').reset();
+  $('loginMask').classList.add('show');
+  setTimeout(() => $('loginUsername').focus(), 100);
+}
+
+// 打开设置账号弹窗
+function openSetupModal() {
+  $('setupError').textContent = '';
+  $('setupForm').reset();
+  $('setupMask').classList.add('show');
+  setTimeout(() => $('setupUsername').focus(), 100);
+}
+
+// 打开注册弹窗
+function openRegisterModal() {
+  closeModal('loginMask');
+  $('regError').textContent = '';
+  $('regForm').reset();
+  $('regMask').classList.add('show');
+  setTimeout(() => $('regUsername').focus(), 100);
+}
+
+// 执行登录
+async function doLogin() {
+  const username = $('loginUsername').value.trim();
+  const password = $('loginPassword').value;
+  if (!username || !password) {
+    $('loginError').textContent = '请输入用户名和密码';
+    return;
+  }
+  $('loginError').textContent = '正在登录...';
+  $('loginSubmitBtn').disabled = true;
+  try {
+    const r = await api('/api/account/login', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({username, password})
+    });
+    if (r.ok && r.token) {
+      AUTH_TOKEN = r.token;
+      AUTH_USER = r.user;
+      localStorage.setItem('authToken', r.token);
+      closeModal('loginMask');
+      updateAuthUI(true, r.user);
+      toast('<b>登录成功</b><span>欢迎回来，' + esc(r.user.username) + '</span>', 'ok');
+      // 登录后加载监控
+      loadData().catch(()=>{});
+      restartAutoRefresh();
+      updateRecPanel(true).catch(()=>{});
+    } else {
+      $('loginError').textContent = r.msg || '登录失败';
+    }
+  } catch (e) {
+    $('loginError').textContent = '请求失败: ' + e.message;
+  } finally {
+    $('loginSubmitBtn').disabled = false;
+  }
+}
+
+// 设置账号（首次）
+async function doSetup() {
+  const username = $('setupUsername').value.trim();
+  const password = $('setupPassword').value;
+  const confirm = $('setupConfirm').value;
+  if (username.length < 2 || username.length > 32) {
+    $('setupError').textContent = '用户名需2-32个字符';
+    return;
+  }
+  if (password.length < 6) {
+    $('setupError').textContent = '密码至少6位';
+    return;
+  }
+  if (password !== confirm) {
+    $('setupError').textContent = '两次密码不一致';
+    return;
+  }
+  $('setupError').textContent = '正在创建...';
+  $('setupSubmitBtn').disabled = true;
+  try {
+    const r = await api('/api/account/setup', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({username, password})
+    });
+    if (r.ok) {
+      closeModal('setupMask');
+      // 创建成功后自动登录
+      const login = await api('/api/account/login', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({username, password})
+      });
+      if (login.ok && login.token) {
+        AUTH_TOKEN = login.token;
+        AUTH_USER = login.user;
+        localStorage.setItem('authToken', login.token);
+      }
+      updateAuthUI(true, login.user || {username: username, role: 'admin'});
+      toast('<b>账号创建成功</b><span>' + esc(username) + '</span>', 'ok');
+    } else {
+      $('setupError').textContent = r.msg || '创建失败';
+    }
+  } catch (e) {
+    $('setupError').textContent = '请求失败: ' + e.message;
+  } finally {
+    $('setupSubmitBtn').disabled = false;
+  }
+}
+
+// 执行注册（普通用户 role=user，注册成功自动登录）
+async function doRegister() {
+  const username = $('regUsername').value.trim();
+  const password = $('regPassword').value;
+  const confirm = $('regConfirm').value;
+  if (username.length < 2 || username.length > 32) {
+    $('regError').textContent = '用户名需2-32个字符';
+    return;
+  }
+  if (password.length < 6) {
+    $('regError').textContent = '密码至少6位';
+    return;
+  }
+  if (password !== confirm) {
+    $('regError').textContent = '两次密码不一致';
+    return;
+  }
+  $('regError').textContent = '正在注册...';
+  $('regSubmitBtn').disabled = true;
+  try {
+    const r = await api('/api/account/register', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({username, password})
+    });
+    if (r.ok) {
+      closeModal('regMask');
+      // 注册成功自动登录
+      const login = await api('/api/account/login', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({username, password})
+      });
+      if (login.ok && login.token) {
+        AUTH_TOKEN = login.token;
+        AUTH_USER = login.user;
+        localStorage.setItem('authToken', login.token);
+      }
+      updateAuthUI(true, login.user || {username, role: 'user'});
+      toast('<b>注册成功</b><span>欢迎，' + esc(username) + '</span>', 'ok');
+      // 新注册用户暂无主播，跳过主播列表接口请求，直接显示空白提示
+      STREAMERS = [];
+      render();
+      restartAutoRefresh();
+      updateRecPanel(true).catch(()=>{});
+    } else {
+      $('regError').textContent = r.msg || '注册失败';
+    }
+  } catch (e) {
+    $('regError').textContent = '请求失败: ' + e.message;
+  } finally {
+    $('regSubmitBtn').disabled = false;
+  }
+}
+
+// 退出登录
+function doLogout() {
+  AUTH_TOKEN = '';
+  AUTH_USER = null;
+  localStorage.removeItem('authToken');
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = null;
+  updateAuthUI(false, null);
+  toast('已退出登录', 'ok');
+}
+
+// 修改密码
+async function openChangePassword() {
+  $('changeError').textContent = '';
+  $('changeForm').reset();
+  $('changeMask').classList.add('show');
+}
+
+async function doChangePassword() {
+  const old_pwd = $('changeOldPwd').value;
+  const new_pwd = $('changeNewPwd').value;
+  const confirm_pwd = $('changeConfirmPwd').value;
+  if (new_pwd.length < 6) {
+    $('changeError').textContent = '新密码至少6位';
+    return;
+  }
+  if (new_pwd !== confirm_pwd) {
+    $('changeError').textContent = '两次密码不一致';
+    return;
+  }
+  $('changeError').textContent = '正在修改...';
+  $('changeSubmitBtn').disabled = true;
+  try {
+    const r = await api('/api/account/change', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({old_password: old_pwd, new_password: new_pwd})
+    });
+    if (r.ok) {
+      closeModal('changeMask');
+      toast('密码修改成功', 'ok');
+    } else {
+      $('changeError').textContent = r.msg || '修改失败';
+    }
+  } catch (e) {
+    $('changeError').textContent = '请求失败: ' + e.message;
+  } finally {
+    $('changeSubmitBtn').disabled = false;
+  }
+}
+
+// 需要登录的 API 调用封装（已统一由 api() 处理，此处仅保留兼容别名）
+async function apiAuth(url, opts) {
+  return api(url, Object.assign({}, opts, {headers: authHeaders(opts.headers)}));
+}
+
+// 启动时检查登录（init 内已 await checkAuth，此处不再重复）
+</script>
+<!-- 登录弹窗 -->
+<div class="modal-mask" id="loginMask">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-head"><h3>🔐 登录</h3><button class="btn sm ghost" onclick="closeModal('loginMask')">✕</button></div>
+    <div class="modal-body">
+      <form id="loginForm" onsubmit="event.preventDefault();doLogin()">
+        <label>用户名</label>
+        <input id="loginUsername" placeholder="输入用户名" required>
+        <label>密码</label>
+        <input id="loginPassword" type="password" placeholder="输入密码" required>
+        <div id="loginError" style="color:#f87171;font-size:12px;margin-top:4px"></div>
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <button class="btn primary" style="flex:1" type="submit" id="loginSubmitBtn">登录</button>
+          <button class="btn" type="button" onclick="closeModal('loginMask')">取消</button>
+        </div>
+      </form>
+      <div style="margin-top:14px;text-align:center;font-size:12px;color:var(--dim)">还没有账号？<a href="javascript:void(0)" onclick="openRegisterModal()" style="color:var(--accent,#60a5fa)">立即注册</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- 注册弹窗 -->
+<div class="modal-mask" id="regMask">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-head"><h3>📝 注册</h3><button class="btn sm ghost" onclick="openLoginModal()">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--dim);margin-bottom:12px">注册普通用户账号，登录后可查看主播监控等完整功能。</div>
+      <form id="regForm" onsubmit="event.preventDefault();doRegister()">
+        <label>用户名</label>
+        <input id="regUsername" placeholder="2-32个字符" required minlength="2" maxlength="32">
+        <label>密码</label>
+        <input id="regPassword" type="password" placeholder="至少6位" required minlength="6">
+        <label>确认密码</label>
+        <input id="regConfirm" type="password" placeholder="再次输入密码" required>
+        <div id="regError" style="color:#f87171;font-size:12px;margin-top:4px"></div>
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <button class="btn primary" style="flex:1" type="submit" id="regSubmitBtn">注册并登录</button>
+          <button class="btn" type="button" onclick="openLoginModal()">取消</button>
+        </div>
+      </form>
+      <div style="margin-top:14px;text-align:center;font-size:12px;color:var(--dim)">已有账号？<a href="javascript:void(0)" onclick="openLoginModal()" style="color:var(--accent,#60a5fa)">去登录</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- 设置账号弹窗 -->
+<div class="modal-mask" id="setupMask">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-head"><h3>🔑 设置管理员账号</h3><button class="btn sm ghost" onclick="closeModal('setupMask')">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--dim);margin-bottom:12px">首次使用需要创建一个管理员账号，用于保护关键设置操作。</div>
+      <form id="setupForm" onsubmit="event.preventDefault();doSetup()">
+        <label>用户名</label>
+        <input id="setupUsername" placeholder="2-32个字符" required minlength="2" maxlength="32">
+        <label>密码</label>
+        <input id="setupPassword" type="password" placeholder="至少6位" required minlength="6">
+        <label>确认密码</label>
+        <input id="setupConfirm" type="password" placeholder="再次输入密码" required>
+        <div id="setupError" style="color:#f87171;font-size:12px;margin-top:4px"></div>
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <button class="btn primary" style="flex:1" type="submit" id="setupSubmitBtn">创建并登录</button>
+          <button class="btn" type="button" onclick="closeModal('setupMask')">取消</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 修改密码弹窗 -->
+<div class="modal-mask" id="changeMask">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-head"><h3>🔑 修改密码</h3><button class="btn sm ghost" onclick="closeModal('changeMask')">✕</button></div>
+    <div class="modal-body">
+      <form id="changeForm" onsubmit="event.preventDefault();doChangePassword()">
+        <label>旧密码</label>
+        <input id="changeOldPwd" type="password" placeholder="输入旧密码" required>
+        <label>新密码</label>
+        <input id="changeNewPwd" type="password" placeholder="至少6位" required minlength="6">
+        <label>确认新密码</label>
+        <input id="changeConfirmPwd" type="password" placeholder="再次输入新密码" required>
+        <div id="changeError" style="color:#f87171;font-size:12px;margin-top:4px"></div>
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <button class="btn primary" style="flex:1" type="submit" id="changeSubmitBtn">修改</button>
+          <button class="btn" type="button" onclick="closeModal('changeMask')">取消</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 直播广场弹窗 -->
+<div class="modal-mask" id="squareMask">
+  <div class="modal" style="max-width:860px">
+    <div class="modal-head">
+      <h3>🛰 直播广场</h3>
+      <span style="font-size:11px;color:var(--dim)">热搜榜 + 直播搜索 + 推荐直播</span>
+      <button class="btn sm ghost" onclick="closeModal('squareMask')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn" onclick="loadSquarePartitions()">🗂 分类</button>
+        <button class="btn" onclick="loadSquareFeed()">🎬 推荐直播</button>
+        <button class="btn" onclick="loadSquareHot()">🔥 热搜榜</button>
+        <input id="squareKeyword" placeholder="输入关键词搜索直播间（需要已配置 a_bogus/msToken）"
+               style="flex:1" onkeydown="if(event.key==='Enter')searchSquareLive()">
+        <button class="btn primary" onclick="searchSquareLive()">🔍 搜索</button>
+      </div>
+      <!-- 固定悬浮分类条：一行横向滚动 + 搜索分类 -->
+      <div id="squareCategoryBar" style="display:none;position:sticky;top:0;z-index:5;background:var(--bg,#141b2d);border:1px solid var(--line,#2a3350);border-radius:8px;padding:4px 6px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:12px;color:var(--dim);white-space:nowrap">🗂</span>
+          <input id="squareCatSearch" placeholder="搜索分类…" oninput="filterSquareCats(this.value)"
+                 style="width:100px;flex:0 0 auto;font-size:12px;padding:3px 6px;border-radius:6px">
+          <button class="btn sm ghost" style="flex:0 0 auto;padding:2px 5px;font-size:12px;line-height:1" onclick="squareCatScroll(-1)" title="向左滚动">◀</button>
+          <div id="squareCatList" style="display:flex;gap:4px;overflow-x:auto;white-space:nowrap;flex:1;padding:2px 0"></div>
+          <button class="btn sm ghost" style="flex:0 0 auto;padding:2px 5px;font-size:12px;line-height:1" onclick="squareCatScroll(1)" title="向右滚动">▶</button>
+        </div>
+      </div>
+      <div id="squareBody" style="min-height:320px;max-height:60vh;overflow:auto;font-size:12px;color:var(--dim)">加载中…</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
