@@ -59,18 +59,29 @@ export async function parseAweme(text) {
     return { ok: false, msg: "未识别到抖音链接，请粘贴分享文案或视频链接" };
   }
 
-  // 2. 跟随短链重定向（v.douyin.com）
+  // 2. 跟随短链重定向（v.douyin.com；带 ttwid，失败可重试一次）
   let finalUrl = url;
   if (/v\.douyin\.com/i.test(url)) {
-    try {
+    const ttwid = await ensureTtwid();
+    const slHeaders = { "User-Agent": UA_MOBILE };
+    if (ttwid) slHeaders.Cookie = `ttwid=${ttwid}`;
+    const follow = async () => {
       const res = await undiciFetch(url, {
-        headers: { "User-Agent": UA_MOBILE },
+        headers: slHeaders,
         redirect: "follow",
         dispatcher: getDispatcher(),
         signal: AbortSignal.timeout(15000),
       });
       try { res.body && res.body.cancel && res.body.cancel(); } catch {}
-      finalUrl = res.url || finalUrl;
+      return res.url || "";
+    };
+    try {
+      finalUrl = (await follow()) || finalUrl;
+      // 被踢回首页 = 短链被限流，稍作间隔重试一次
+      if (/^https:\/\/www\.douyin\.com\/?$/.test(finalUrl)) {
+        await new Promise((r) => setTimeout(r, 800));
+        finalUrl = (await follow()) || finalUrl;
+      }
     } catch (e) {
       return { ok: false, msg: `短链解析失败: ${e && e.message ? e.message : e}` };
     }
@@ -82,6 +93,9 @@ export async function parseAweme(text) {
   if (!m) m = finalUrl.match(/[?&](?:modal_id|aweme_id)=(\d+)/);
   if (!m && /^\d{15,21}$/.test(url)) m = [url, url];
   if (!m) {
+    if (/^https:\/\/www\.douyin\.com\/?$/.test(finalUrl)) {
+      return { ok: false, msg: "短链未能展开（可能被抖音限流），请稍后重试，或粘贴长链接（www.douyin.com/video/作品ID）" };
+    }
     return { ok: false, msg: "未能从链接中识别出作品 ID（直播链接请用「添加主播」，仅支持视频/图集作品）" };
   }
   const id = m[1];

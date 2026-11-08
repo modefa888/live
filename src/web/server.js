@@ -88,7 +88,10 @@ function qint(req, key, def) {
 
 function maskAuth(req) {
   const h = req.headers["authorization"] || req.headers["x-auth-token"] || "";
-  return String(h).replace("Bearer ", "").trim();
+  let token = String(h).replace("Bearer ", "").trim();
+  // <video>/<a> 等媒体标签无法携带 Authorization 头，允许 ?token= 查询参数鉴权
+  if (!token && req.query && req.query.token) token = String(req.query.token).trim();
+  return token;
 }
 
 // ---------- 会话持久化（MongoDB） ----------
@@ -476,24 +479,33 @@ export function createApp(state, services) {
     }
     let upstream;
     try {
+      const upHeaders = {
+        "User-Agent": UA_DESKTOP,
+        "Referer": "https://live.douyin.com/",
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+      };
+      // 透传 Range 头：视频/音频拖动进度条需要 206 分段响应
+      const range = req.headers["range"];
+      if (range) upHeaders.Range = range;
       upstream = await undiciFetch(url, {
-        headers: {
-          "User-Agent": UA_DESKTOP,
-          "Referer": "https://live.douyin.com/",
-          "Accept": "*/*",
-          "Accept-Encoding": "identity",
-        },
+        headers: upHeaders,
         dispatcher: getDispatcher(),
         redirect: "follow",
       });
-      if (!upstream.ok) throw new Error(`HTTP ${upstream.status}`);
+      if (!upstream.ok && upstream.status !== 206) throw new Error(`HTTP ${upstream.status}`);
     } catch (e) {
       log("warn", `代理失败: ${e && e.message ? e.message : e}`);
       if (!res.headersSent) return res.status(502).json({ error: String(e && e.message ? e.message : e) });
       return;
     }
-    res.status(200);
+    // 透传上游状态码（200/206）与分段响应相关头
+    res.status(upstream.status);
     res.setHeader("Content-Type", upstream.headers.get("content-type") || "application/octet-stream");
+    for (const h of ["content-range", "accept-ranges", "content-length"]) {
+      const v = upstream.headers.get(h);
+      if (v) res.setHeader(h, v);
+    }
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Connection", "close");
     const nodeStream = Readable.fromWeb(upstream.body);

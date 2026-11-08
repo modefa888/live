@@ -323,7 +323,7 @@
         <button class="btn" onclick="closeModal('parseMask')">关闭</button>
       </div>
       <div id="parseResult" style="margin-top:14px"></div>
-      <div class="hint">💡 视频：可直接播放 + 无水印下载；图集：图片/动图逐张查看下载（下载走本服务代理）</div>
+      <div class="hint">💡 视频：直连播放（被 CDN 拒时自动转代理）+ 无水印下载；图集：图片/动图逐张查看下载</div>
     </div>
   </div>
 </div>
@@ -1641,17 +1641,22 @@ function renderParseResult(d) {
 
   if (d.type === 'video') {
     const dlName = ((d.desc || 'douyin_video').slice(0, 30)).replace(/[\\/:*?"<>|\s]+/g, '_');
+    const proxyBase = '/api/proxy?token=' + encodeURIComponent(AUTH_TOKEN || '') + '&u=';
     box.innerHTML = head
       + '<div style="font-size:11px;color:var(--dim);margin-bottom:8px">🎬 视频作品 · 时长 ' + fmtDurMs(d.duration) + '</div>'
-      + '<video controls playsinline preload="metadata" poster="' + esc(d.cover || '') + '" src="' + esc(d.play_url || '') + '" '
+      + '<video controls playsinline preload="metadata" poster="' + esc(d.cover || '') + '" '
+      + 'src="' + esc(d.play_url || '') + '" data-proxy="' + esc(proxyBase + encodeURIComponent(d.play_url || '')) + '" '
+      + 'onerror="parseVideoFallback(this)" '
       + 'style="width:100%;max-height:420px;border-radius:10px;background:#000"></video>'
+      + '<div class="hint" id="parseVideoHint" style="margin-top:6px;display:none;color:#facc15"></div>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
       + (d.videos || []).map((v, i) =>
-          '<a class="btn sm' + (i === 0 ? ' primary' : '') + '" href="/api/proxy?u=' + encodeURIComponent(v.url) + '" download="' + esc(dlName) + '.mp4" style="text-decoration:none">⬇ ' + esc(v.label) + '</a>').join('')
-      + (d.cover ? '<a class="btn sm" href="/api/proxy?u=' + encodeURIComponent(d.cover) + '" download="' + esc(dlName) + '_cover.jpeg" style="text-decoration:none">🖼 封面</a>' : '')
-      + (d.music ? '<a class="btn sm" href="/api/proxy?u=' + encodeURIComponent(d.music) + '" download="' + esc(dlName) + '_music.mp3" style="text-decoration:none">🎵 背景音乐</a>' : '')
+          '<a class="btn sm' + (i === 0 ? ' primary' : '') + '" href="' + proxyBase + encodeURIComponent(v.url) + '" download="' + esc(dlName) + '.mp4" style="text-decoration:none">⬇ ' + esc(v.label) + '</a>').join('')
+      + (d.cover ? '<a class="btn sm" href="' + proxyBase + encodeURIComponent(d.cover) + '" download="' + esc(dlName) + '_cover.jpeg" style="text-decoration:none">🖼 封面</a>' : '')
+      + (d.music ? '<a class="btn sm" href="' + proxyBase + encodeURIComponent(d.music) + '" download="' + esc(dlName) + '_music.mp3" style="text-decoration:none">🎵 背景音乐</a>' : '')
       + '</div>';
   } else if (d.type === 'album') {
+    const proxyBase = '/api/proxy?token=' + encodeURIComponent(AUTH_TOKEN || '') + '&u=';
     window._parseImages = d.images || [];
     box.innerHTML = head
       + '<div style="font-size:11px;color:var(--dim);margin-bottom:8px">🖼 图集 · 共 ' + d.count + ' 张（支持图片 / 动图，点击查看大图）</div>'
@@ -1659,7 +1664,7 @@ function renderParseResult(d) {
       + (d.images || []).map((u, i) =>
           '<figure style="margin:0;position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line)">'
           + '<img src="' + esc(u) + '" loading="lazy" style="width:100%;display:block;cursor:zoom-in" onclick="window.open(\'' + esc(u) + '\')">'
-          + '<a href="/api/proxy?u=' + encodeURIComponent(u) + '" download="album_' + (i + 1) + '.jpg" '
+          + '<a href="' + proxyBase + encodeURIComponent(u) + '" download="album_' + (i + 1) + '.jpg" '
           + 'style="position:absolute;right:4px;bottom:4px;background:#0009;border-radius:6px;padding:2px 8px;font-size:11px;color:#fff;text-decoration:none">⬇</a>'
           + '</figure>').join('')
       + '</div>'
@@ -1682,6 +1687,21 @@ function copyParseImages() {
     ta.value = text; document.body.appendChild(ta); ta.select();
     document.execCommand('copy'); ta.remove();
     toast('已复制 ' + urls.length + ' 个链接', 'ok');
+  }
+}
+
+// 直连播放被 CDN 拒绝（签名直链绑定解析时出口 IP）时，自动切换本服务代理播放
+function parseVideoFallback(v) {
+  if (v.dataset.fallbackDone) return;
+  v.dataset.fallbackDone = '1';
+  const proxy = v.dataset.proxy;
+  if (!proxy) return;
+  v.src = proxy;
+  v.play().catch(() => {});
+  var hint = document.getElementById('parseVideoHint');
+  if (hint) {
+    hint.style.display = 'block';
+    hint.textContent = '⚠ 直连播放被 CDN 拒绝（直链绑定解析时 IP），已自动切换为本服务代理播放';
   }
 }
 
