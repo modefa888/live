@@ -56,6 +56,7 @@ export const QUALITY_LABEL = {
 export const ALLOWED_STREAM_HOSTS = [
   "douyincdn.com", "douyin.com", "amemv.com", "byteimg.com",
   "douyinpic.com", "douyinstatic.com", "ixigua.com", "bytedance.com",
+  "douyinvod.com", "snssdk.com", "zjcdn.com", "iesdouyin.com",
 ];
 
 // ---------- 默认配置 ----------
