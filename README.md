@@ -75,7 +75,7 @@ npx vercel          # 首次会引导登录并关联项目（Root Directory 保�
    - `MONGO_URI`：Atlas 连接串（`mongodb+srv://用户:密码@xxx.mongodb.net/?retryWrites=true&w=majority`）
    - `MONGO_DB`：库名（如 `live`）
    - `CRON_SECRET`：任意随机串（保护定时刷新接口；设置后 Vercel Cron 自动附带 Bearer 头）
-2. `vercel.json` 已配置：全部路由走 `api/index.js`（Express → Serverless）、页面/JS 资源随函数打包、每小时 Cron 调用 `/api/cron/refresh` 执行一轮监控刷新。
+2. `vercel.json` 已配置：全部路由走 `api/index.js`（Express → Serverless）、页面/JS 资源随函数打包、**每天一次** Cron 调用 `/api/cron/refresh` 执行监控刷新（`"0 1 * * *"` = 北京时间每天 09:00；Hobby 免费版仅支持每天一次，Pro 才能改每小时/每分钟）。
 
 **Serverless 限制（重要）：**
 
