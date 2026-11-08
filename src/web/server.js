@@ -235,6 +235,22 @@ export function createApp(state, services) {
     res.end(fs.readFileSync(fp));
   });
 
+  // 网站图标
+  const FAVICON_TYPES = {
+    "/favicon.svg": ["favicon.svg", "image/svg+xml"],
+    "/favicon.png": ["favicon.png", "image/png"],
+    "/favicon.ico": ["favicon.ico", "image/x-icon"],
+  };
+  for (const [route, [file, ctype]] of Object.entries(FAVICON_TYPES)) {
+    app.get(route, (req, res) => {
+      const fp = path.join(PUBLIC_DIR, file);
+      if (!fs.existsSync(fp)) return res.status(404).json({ error: "not found" });
+      res.setHeader("Content-Type", ctype);
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.end(fs.readFileSync(fp));
+    });
+  }
+
   // ---------- 主播 / 监控数据 ----------
   function findStreamer(sid) {
     sid = String(sid || "");
