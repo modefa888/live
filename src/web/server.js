@@ -19,7 +19,7 @@ import { getDispatcher, setGlobalProxy } from "../utils/httputil.js";
 const nowSec = () => Math.floor(Date.now() / 1000);
 
 // ---------- 会话（进程内存，重启失效；与 Python Handler._sessions 一致） ----------
-const sessions = new Map(); // token -> {username, role, created_at}
+const sessions = new Map(); // token -> {username, role, created_at}（本实例热缓存；持久层见 MongoDB sessions 集合）
 
 // 需要登录才能操作的 API 路径（POST）
 const PROTECTED_PATHS = new Set([
@@ -90,7 +90,26 @@ function maskAuth(req) {
   return String(h).replace("Bearer ", "").trim();
 }
 
-function checkAuth(req, res, allowUnauth = false) {
+// ---------- 会话持久化（MongoDB） ----------
+// 本地原版会话存进程内存（重启失效）；Serverless 环境多实例/冷启动会互相看不到，
+// 因此会话写入 MongoDB 的 sessions 集合（多实例共享、重启不丢），内存 Map 仅作热缓存。
+function getSessionsColl() {
+  try {
+    const backend = getBackend();
+    return backend.collection ? backend.collection("sessions") : null;
+  } catch {
+    return null;
+  }
+}
+
+function pruneSessions() {
+  if (sessions.size > 2000) {
+    const entries = [...sessions.entries()].sort((a, b) => a[1].created_at - b[1].created_at);
+    for (let i = 0; i < entries.length / 2; i++) sessions.delete(entries[i][0]);
+  }
+}
+
+async function checkAuth(req, res, allowUnauth = false) {
   // 检查当前请求是否已登录。返回 [authenticated, user_dict 或 null]
   const token = maskAuth(req);
   if (!token) {
@@ -98,16 +117,41 @@ function checkAuth(req, res, allowUnauth = false) {
     res.status(401).json({ ok: false, msg: "需要登录", code: "unauthorized" });
     return [null, null];
   }
-  const session = sessions.get(token);
+  // 1. 本实例热缓存
+  let session = sessions.get(token);
+  if (!session) {
+    // 2. MongoDB 持久会话（跨实例共享）
+    try {
+      const coll = getSessionsColl();
+      if (coll) {
+        const doc = await coll.findOne({ token });
+        if (doc) {
+          session = { username: doc.username, role: doc.role, created_at: doc.created_at };
+          sessions.set(token, session);
+        }
+      }
+    } catch {}
+  }
   if (session) return [true, session];
   if (allowUnauth) return [false, null];
   res.status(401).json({ ok: false, msg: "需要登录", code: "unauthorized" });
   return [null, null];
 }
 
-function requireAuth(req, res) {
-  const [authed] = checkAuth(req, res);
+async function requireAuth(req, res) {
+  const [authed] = await checkAuth(req, res);
   return !!authed;
+}
+
+// 路由门 Middleware：未登录直接 401（异步版，适配 Mongo 会话查询）
+async function authMw(req, res, next) {
+  try {
+    const authed = await requireAuth(req, res);
+    if (!authed) return; // 401 已写入
+    next();
+  } catch (e) {
+    next(e);
+  }
 }
 
 // ---------- 备份操作串行锁（对应 Python _BACKUP_LOCK） ----------
@@ -206,12 +250,9 @@ export function createApp(state, services) {
     return { ...s, history_today: await monitor.history_stats(s) };
   }
 
-  app.get("/api/streamers", (req, res, next) => {
-    if (PROTECTED_GET.has("/api/streamers") && !requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/streamers", authMw, ah(async (req, res) => {
     // 仅返回当前登录用户关联的主播；游客返回空列表
-    const [authed, user] = checkAuth(req, res, true);
+    const [authed, user] = await checkAuth(req, res, true);
     let streamers = [];
     if (authed && user) {
       const ids = new Set(await getBackend().loadUserStreamerIds(user.username));
@@ -227,10 +268,7 @@ export function createApp(state, services) {
     });
   }));
 
-  app.get("/api/room", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/room", authMw, ah(async (req, res) => {
     const s = findStreamer(q1(req, "id"));
     if (!s) return res.status(404).json({ error: "未找到该主播" });
     const web_rid = s.web_rid || "";
@@ -238,20 +276,14 @@ export function createApp(state, services) {
     res.json(await streamerPayload(s));
   }));
 
-  app.get("/api/parse", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/parse", authMw, ah(async (req, res) => {
     const text = q1(req, "text");
     res.json(await resolveInput(text, client));
   }));
 
-  app.get("/api/refresh", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/refresh", authMw, ah(async (req, res) => {
     // 仅管理员可触发刷新（拉取主播最新状态）
-    const [, user] = checkAuth(req, res);
+    const [, user] = await checkAuth(req, res);
     if (!user) return;
     if (user.role !== "admin") {
       return res.status(403).json({ ok: false, msg: "仅管理员可触发刷新", code: "forbidden" });
@@ -289,17 +321,11 @@ export function createApp(state, services) {
   }));
 
   // ---------- 录播 ----------
-  app.get("/api/recordings", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/recordings", authMw, ah(async (req, res) => {
     res.json({ records: recorder.list() });
   }));
 
-  app.get("/api/record_history", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/record_history", authMw, ah(async (req, res) => {
     const history = await recorder.get_history();
     for (const rec of history) {
       rec.exists = fs.existsSync(rec.file_path || "");
@@ -307,10 +333,7 @@ export function createApp(state, services) {
     res.json({ history });
   }));
 
-  app.get("/api/record_download", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/record_download", authMw, ah(async (req, res) => {
     const rec_id = parseInt(q1(req, "id"), 10);
     if (Number.isNaN(rec_id)) return res.status(400).json({ error: "缺少录播 ID" });
 
@@ -342,12 +365,9 @@ export function createApp(state, services) {
   }));
 
   // ---------- 配置 / 日志 / 导入导出 ----------
-  app.get("/api/config", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/config", authMw, ah(async (req, res) => {
     // 仅管理员可读取系统配置
-    const [, user] = checkAuth(req, res);
+    const [, user] = await checkAuth(req, res);
     if (!user) return;
     if (user.role !== "admin") {
       return res.status(403).json({ ok: false, msg: "仅管理员可查看配置", code: "forbidden" });
@@ -368,10 +388,7 @@ export function createApp(state, services) {
     res.json({ config: cfg });
   }));
 
-  app.get("/api/export", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/export", authMw, ah(async (req, res) => {
     const body = Buffer.from(JSON.stringify(state.streamers, null, 2), "utf-8");
     res.status(200);
     res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -380,10 +397,7 @@ export function createApp(state, services) {
     res.end(body);
   }));
 
-  app.get("/api/logs", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/logs", authMw, ah(async (req, res) => {
     const sec_uid = q1(req, "sec_uid");
     const logs = await getBackend().getLogs(sec_uid);
     // 同时合并内存中的新日志（避免重启前丢失）
@@ -393,10 +407,7 @@ export function createApp(state, services) {
     res.json({ logs });
   }));
 
-  app.get("/api/search", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/search", authMw, ah(async (req, res) => {
     const keyword = (q1(req, "keyword") || q1(req, "q") || "").trim();
     if (!keyword) return res.json({ ok: false, msg: "请输入关键词" });
     res.json(await client.search(keyword));
@@ -431,10 +442,7 @@ export function createApp(state, services) {
   }));
 
   // ---------- 流代理 / 本地操作 ----------
-  app.get("/api/proxy", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/proxy", authMw, ah(async (req, res) => {
     const url = q1(req, "u");
     let parsed = null;
     try { parsed = new URL(url); } catch {}
@@ -471,10 +479,7 @@ export function createApp(state, services) {
     nodeStream.on("error", () => res.destroy());
   }));
 
-  app.get("/api/open_dir", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/open_dir", authMw, ah(async (req, res) => {
     const p = state.config.record_dir || DEFAULT_RECORD_DIR;
     fs.mkdirSync(p, { recursive: true });
     try {
@@ -486,10 +491,7 @@ export function createApp(state, services) {
     }
   }));
 
-  app.get("/api/play", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/play", authMw, ah(async (req, res) => {
     const url = q1(req, "u");
     const players = [
       ["mpv", ["mpv", url]],
@@ -512,10 +514,7 @@ export function createApp(state, services) {
   }));
 
   // ---------- Pin / 通知 / 福袋 / 存储 ----------
-  app.get("/api/pin", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/pin", authMw, ah(async (req, res) => {
     // 获取当前置顶状态
     const s = findStreamer(q1(req, "id"));
     if (!s) return res.status(404).json({ error: "未找到该主播" });
@@ -555,19 +554,10 @@ export function createApp(state, services) {
       res.json({ ok: false, msg: String(e && e.message ? e.message : e) });
     }
   }
-  app.get("/api/notify", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(apiNotify));
-  app.post("/api/notify", (req, res, next) => {
-    if (PROTECTED_PATHS.has("/api/notify") && !requireAuth(req, res)) return;
-    next();
-  }, ah(apiNotify));
+  app.get("/api/notify", authMw, ah(apiNotify));
+  app.post("/api/notify", authMw, ah(apiNotify));
 
-  app.get("/api/backup/list", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/backup/list", authMw, ah(async (req, res) => {
     // 获取备份列表（进程内实现，无需子进程）
     try {
       const data = cmdList();
@@ -577,10 +567,7 @@ export function createApp(state, services) {
     }
   }));
 
-  app.get("/api/fudai", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/fudai", authMw, ah(async (req, res) => {
     // 手动检测福袋（调试用）。GET /api/fudai?id=<web_rid>&force=1
     const web_rid = q1(req, "id").trim();
     if (!web_rid) return res.json({ ok: false, msg: "缺少 id 参数" });
@@ -593,10 +580,7 @@ export function createApp(state, services) {
     }
   }));
 
-  app.get("/api/fudai/right", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/fudai/right", authMw, ah(async (req, res) => {
     // 查询当前账号参与福袋资格（调试用）
     const lottery_id = q1(req, "lottery_id").trim();
     const room_id = q1(req, "room_id").trim();
@@ -613,10 +597,7 @@ export function createApp(state, services) {
     }
   }));
 
-  app.get("/api/storage/status", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/storage/status", authMw, ah(async (req, res) => {
     // 获取存储状态（Node 版单一 MongoDB 后端）
     const backend = getBackend();
     const mongo = await backend.getStatus();
@@ -627,10 +608,7 @@ export function createApp(state, services) {
     });
   }));
 
-  app.get("/api/notify/logs", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/notify/logs", authMw, ah(async (req, res) => {
     // 获取通知记录
     const sec_uid = q1(req, "sec_uid");
     const channel = q1(req, "channel");
@@ -644,10 +622,7 @@ export function createApp(state, services) {
     }
   }));
 
-  app.get("/api/fudai/history", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/fudai/history", authMw, ah(async (req, res) => {
     // 获取福袋历史记录
     const sec_uid = q1(req, "sec_uid");
     const limit = qint(req, "limit", 200);
@@ -659,10 +634,7 @@ export function createApp(state, services) {
     }
   }));
 
-  app.get("/api/fudai/current", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/fudai/current", authMw, ah(async (req, res) => {
     // 获取指定主播的当前福袋状态。注意此处用 sec_uid（/api/fudai 用 web_rid）
     const sec_uid = q1(req, "id").trim();
     if (!sec_uid) return res.json({ ok: false, msg: "缺少 id 参数" });
@@ -677,7 +649,7 @@ export function createApp(state, services) {
   // ---------- 账号 API（公开） ----------
   app.get("/api/account/status", ah(async (req, res) => {
     // 检查当前登录状态
-    const [authed, user] = checkAuth(req, res, true);
+    const [authed, user] = await checkAuth(req, res, true);
     if (authed) {
       res.json({ ok: true, logged_in: true, user: { username: user.username, role: user.role } });
     } else {
@@ -746,7 +718,16 @@ export function createApp(state, services) {
       // 生成简单 token（与 Python 相同的构造方式）
       const raw = `${username}|${password}|${nowSec()}|${crypto.randomBytes(8).toString("hex")}`;
       const token = crypto.createHash("sha256").update(raw, "utf-8").digest("hex");
-      sessions.set(token, { username: user.username, role: user.role, created_at: nowSec() });
+      const created = nowSec();
+      sessions.set(token, { username: user.username, role: user.role, created_at: created });
+      pruneSessions();
+      // 持久化到 MongoDB（Serverless 多实例共享会话）
+      try {
+        const coll = getSessionsColl();
+        if (coll) {
+          await coll.insertOne({ token, username: user.username, role: user.role, created_at: created });
+        }
+      } catch {}
       res.json({ ok: true, token, user: { username: user.username, role: user.role } });
     } catch (e) {
       res.json({ ok: false, msg: String(e && e.message ? e.message : e) });
@@ -754,15 +735,19 @@ export function createApp(state, services) {
   }));
 
   app.post("/api/account/logout", ah(async (req, res) => {
-    // 登出（清除 session token）
+    // 登出（清除 session token：内存 + MongoDB）
     const token = maskAuth(req);
     sessions.delete(token);
+    try {
+      const coll = getSessionsColl();
+      if (coll) await coll.deleteOne({ token });
+    } catch {}
     res.json({ ok: true, msg: "已退出" });
   }));
 
   app.post("/api/account/change", ah(async (req, res) => {
     // 修改密码
-    const [authed, user] = checkAuth(req, res);
+    const [authed, user] = await checkAuth(req, res);
     if (!authed) return;
     const body = req.body || {};
     const old_password = body.old_password || "";
@@ -779,17 +764,14 @@ export function createApp(state, services) {
   }));
 
   // ---------- 主播 CRUD（POST，需登录） ----------
-  app.post("/api/add", (req, res, next) => {
-    if (PROTECTED_PATHS.has("/api/add") && !requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.post("/api/add", authMw, ah(async (req, res) => {
     const data = req.body || {};
     const parsed = await resolveInput(data.text || "", client);
     if (!parsed.web_rid && !parsed.sec_uid) {
       return res.json({ ok: false, msg: parsed.error || "无法识别输入" });
     }
     const item_id = parsed.sec_uid || parsed.web_rid;
-    const [authed, user] = checkAuth(req, res, true);
+    const [authed, user] = await checkAuth(req, res, true);
     const username = authed && user ? user.username : "";
     let streamer;
     const existing = findStreamer(item_id);
@@ -822,13 +804,10 @@ export function createApp(state, services) {
     res.json({ ok: true, streamer });
   }));
 
-  app.post("/api/remove", (req, res, next) => {
-    if (PROTECTED_PATHS.has("/api/remove") && !requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.post("/api/remove", authMw, ah(async (req, res) => {
     const data = req.body || {};
     const sid = data.id || "";
-    const [authed, user] = checkAuth(req, res, true);
+    const [authed, user] = await checkAuth(req, res, true);
     const username = authed && user ? user.username : "";
     if (!username) return res.status(401).json({ ok: false, msg: "需要登录" });
     const s = findStreamer(sid);
@@ -842,10 +821,7 @@ export function createApp(state, services) {
     res.json({ ok: true, msg: "已从我的列表移除" });
   }));
 
-  app.post("/api/record", (req, res, next) => {
-    if (PROTECTED_PATHS.has("/api/record") && !requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.post("/api/record", authMw, ah(async (req, res) => {
     const data = req.body || {};
     const sid = data.id || "";
     const action = data.action || "";
@@ -879,10 +855,7 @@ export function createApp(state, services) {
     res.json({ ok, msg });
   }));
 
-  app.post("/api/import", (req, res, next) => {
-    if (PROTECTED_PATHS.has("/api/import") && !requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.post("/api/import", authMw, ah(async (req, res) => {
     const data = req.body || {};
     let items;
     try {
@@ -918,10 +891,7 @@ export function createApp(state, services) {
     res.json({ ok: true, msg: `已导入 ${cleaned.length} 个主播` });
   }));
 
-  app.post("/api/pin", (req, res, next) => {
-    if (PROTECTED_PATHS.has("/api/pin") && !requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.post("/api/pin", authMw, ah(async (req, res) => {
     // 切换置顶状态：0 -> 1, 1 -> 0
     const data = req.body || {};
     const s = findStreamer(data.id || "");
@@ -932,10 +902,7 @@ export function createApp(state, services) {
     res.json({ ok: true, pinned: s.pinned });
   }));
 
-  app.post("/api/update", (req, res, next) => {
-    if (PROTECTED_PATHS.has("/api/update") && !requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.post("/api/update", authMw, ah(async (req, res) => {
     // 更新单个主播设置（如 fudai_enabled）。POST body: {sec_uid, fudai_enabled: 0|1, note?}
     const data = req.body || {};
     const sid = String(data.sec_uid || data.id || "").trim();
@@ -953,12 +920,9 @@ export function createApp(state, services) {
   }));
 
   // ---------- 配置设置（POST，仅 admin） ----------
-  app.post("/api/config", (req, res, next) => {
-    if (PROTECTED_PATHS.has("/api/config") && !requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.post("/api/config", authMw, ah(async (req, res) => {
     // 仅管理员可修改系统配置
-    const [, user] = checkAuth(req, res);
+    const [, user] = await checkAuth(req, res);
     if (!user) return;
     if (user.role !== "admin") {
       return res.status(403).json({ ok: false, msg: "仅管理员可修改配置", code: "forbidden" });
@@ -1083,10 +1047,7 @@ export function createApp(state, services) {
   }));
 
   // ---------- 备份（POST，需登录；进程内实现 + 串行锁） ----------
-  app.post("/api/backup/create", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.post("/api/backup/create", authMw, ah(async (req, res) => {
     try {
       const data = req.body || {};
       const tag = String(data.tag || "").trim();
@@ -1102,10 +1063,7 @@ export function createApp(state, services) {
     }
   }));
 
-  app.post("/api/backup/restore", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.post("/api/backup/restore", authMw, ah(async (req, res) => {
     const data = req.body || {};
     const bid = String(data.id || "").trim();
     if (!bid) return res.json({ ok: false, msg: "缺少备份 ID" });
@@ -1117,10 +1075,7 @@ export function createApp(state, services) {
     }
   }));
 
-  app.post("/api/backup/delete", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.post("/api/backup/delete", authMw, ah(async (req, res) => {
     const data = req.body || {};
     const bid = String(data.id || "").trim();
     const delete_all = Boolean(data.all);
@@ -1136,10 +1091,7 @@ export function createApp(state, services) {
   }));
 
   // ---------- 存储管理（POST，需登录） ----------
-  app.post("/api/storage/test", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.post("/api/storage/test", authMw, ah(async (req, res) => {
     // 测试数据库连接（Node 版为 MongoDB）
     try {
       const { ok, msg } = await getBackend().testConnection();
@@ -1149,10 +1101,7 @@ export function createApp(state, services) {
     }
   }));
 
-  app.post("/api/storage/copy", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.post("/api/storage/copy", authMw, ah(async (req, res) => {
     // Node 版单一后端：双向复制退化为同库无操作，保持响应形状兼容
     const data = req.body || {};
     const direction = String(data.direction || "").trim();
@@ -1181,10 +1130,7 @@ export function createApp(state, services) {
   }));
 
   // ---------- 后台管理 API ----------
-  app.get("/api/admin/tables", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/admin/tables", authMw, ah(async (req, res) => {
     // 获取所有表及记录数。backend 参数仅作兼容（全部指向 MongoDB）
     const backend = getBackend();
     const backend_param = (q1(req, "backend") || "current").trim() || "current";
@@ -1212,10 +1158,7 @@ export function createApp(state, services) {
     res.json({ ok: true, tables });
   }));
 
-  app.get("/api/stats/overview", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/stats/overview", authMw, ah(async (req, res) => {
     // 仪表盘聚合统计：表计数、在线状态、开播趋势、日志分布、通知汇总、录制汇总
     try {
       const backend = getBackend();
@@ -1305,10 +1248,7 @@ export function createApp(state, services) {
     }
   }));
 
-  app.get("/api/admin/records", (req, res, next) => {
-    if (!requireAuth(req, res)) return;
-    next();
-  }, ah(async (req, res) => {
+  app.get("/api/admin/records", authMw, ah(async (req, res) => {
     // 获取指定表的记录列表。backend 参数仅作兼容
     const table = q1(req, "table").trim();
     if (!table || !TABLE_INFO[table]) {
@@ -1392,7 +1332,7 @@ export function createApp(state, services) {
 
   app.post("/api/admin/record/edit", ah(async (req, res) => {
     // 编辑一条记录
-    if (!requireAuth(req, res)) return;
+    if (!(await requireAuth(req, res))) return;
     const body = req.body || {};
     const table = String(body.table || "").trim();
     const primary_key = String(body.primary_key || "").trim();
@@ -1437,7 +1377,7 @@ export function createApp(state, services) {
 
   app.post("/api/admin/record/delete", ah(async (req, res) => {
     // 删除一条记录
-    if (!requireAuth(req, res)) return;
+    if (!(await requireAuth(req, res))) return;
     const body = req.body || {};
     const table = String(body.table || "").trim();
     const primary_key = String(body.primary_key || "").trim();

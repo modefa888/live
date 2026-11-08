@@ -61,7 +61,15 @@ export class MongoHistoryDB {
       db.collection("fudai_history").createIndex({ sec_uid: 1 }),
       db.collection("fudai_history").createIndex({ started_at: 1 }),
       db.collection("accounts").createIndex({ username: 1 }, { unique: true }),
+      // 登录会话持久化（跨实例共享；30 天自动过期）
+      db.collection("sessions").createIndex({ token: 1 }, { unique: true }),
+      db.collection("sessions").createIndex({ created_at: 1 }, { expireAfterSeconds: 30 * 86400 }),
     ]);
+  }
+
+  /** 获取集合（未连接时返回 null，供调用方降级处理） */
+  collection(name) {
+    return this.db ? this.db.collection(name) : null;
   }
 
   /** 模拟 SQLite AUTOINCREMENT（counters 集合原子自增） */

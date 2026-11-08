@@ -85,7 +85,7 @@ npx vercel          # 首次会引导登录并关联项目（Root Directory 保�
 | 监控轮询 | ⚠️ 无常驻线程，由 Vercel Cron 触发（Hobby 计划仅支持每天一次，需改 `crons` 的 schedule；Pro 才能每小时/每分钟） |
 | 录制（ffmpeg 长时间写盘） | ❌ 不可用（无 ffmpeg、执行时限、磁盘临时） |
 | 直播流代理 `/api/proxy` | ⚠️ 受 60s 执行时限限制，长播不稳定 |
-| 会话登录 | ⚠️ 存内存，实例冷启动后需重新登录 |
+| 会话登录 | ✅ 已持久化到 MongoDB（sessions 集合，30 天 TTL），多实例/冷启动共享，重启不丢 |
 | 抖音风控 | ⚠️ Vercel 为海外 IP，直播间接口被风控的概率明显高于本机部署 |
 
 本地长期挂机监控 + 录制仍建议直接 `node index.js` 运行。
