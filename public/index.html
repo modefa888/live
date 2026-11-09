@@ -315,7 +315,7 @@
   <div class="modal">
     <div class="modal-head"><h3>🎬 作品解析</h3><button class="btn sm ghost" onclick="closeModal('parseMask')">✕</button></div>
     <div class="modal-body">
-      <label>粘贴 分享文案 / 短链 / 视频(图集)链接 / 作品ID（支持 视频 · 图集 · 图片 · 动图）</label>
+      <label>粘贴 分享文案 / 短链 / 视频(图集)链接 / 作品ID（支持 视频 · 图集 · 图片 · 动图 · 实况图）</label>
       <textarea id="parseInput" rows="3" placeholder="例如: 7.43 pKc:/ 复制打开抖音看看... https://v.douyin.com/xxxxxxx/"
         style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--txt);resize:vertical;font-size:13px;outline:none"></textarea>
       <div style="margin-top:12px;display:flex;gap:10px">
@@ -323,7 +323,7 @@
         <button class="btn" onclick="closeModal('parseMask')">关闭</button>
       </div>
       <div id="parseResult" style="margin-top:14px"></div>
-      <div class="hint">💡 视频：直连播放（被 CDN 拒时自动转代理）+ 无水印下载；图集：图片/动图逐张查看下载</div>
+      <div class="hint">💡 视频：直连播放（被 CDN 拒时自动转代理）+ 无水印下载；图集：图片/动图逐张下载，实况图可播放并下载动态视频</div>
     </div>
   </div>
 </div>
@@ -1663,51 +1663,135 @@ function renderParseResult(d) {
       + '</div>';
   } else if (d.type === 'album') {
     const proxyBase = '/api/proxy?token=' + encodeURIComponent(AUTH_TOKEN || '') + '&u=';
-    window._parseImages = d.images || [];
+    const photos = (d.photos && d.photos.length)
+      ? d.photos
+      : (d.images || []).map(u => ({ image: u, animated: '', video: '' }));
+    const liveCount = photos.filter(p => p.video).length;
+    const dlName = ((d.desc || 'douyin_album').slice(0, 24)).replace(/[\\/:*?"<>|\s]+/g, '_');
+    window._parsePhotos = photos;
+    window._parseImages = photos.map(p => p.image || p.animated).filter(Boolean);
+    window._parseProxyBase = proxyBase;
     box.innerHTML = head
-      + '<div style="font-size:11px;color:var(--dim);margin-bottom:8px">🖼 图集 · 共 ' + d.count + ' 张（支持图片 / 动图，点击查看大图）</div>'
+      + '<div style="font-size:11px;color:var(--dim);margin-bottom:8px">🖼 图集 · 共 ' + photos.length + ' 张'
+      + (liveCount ? ' · 含 ' + liveCount + ' 个动态视频（点缩略图播放 / 下载 mp4）' : '（点击查看大图）') + '</div>'
+      + '<div id="parseLivePlayer" style="display:none;margin-bottom:10px">'
+      + '<video id="parseLiveVideo" controls loop playsinline preload="metadata" onerror="parseVideoFallback(this)" '
+      + 'style="width:100%;max-height:420px;border-radius:10px;background:#000"></video>'
+      + '<div class="hint" id="parseVideoHint" style="margin-top:6px;display:none;color:#facc15"></div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">'
+      + '<a id="parseLiveDl" class="btn sm primary" href="#" style="text-decoration:none">⬇ 下载动态视频</a>'
+      + '<button class="btn sm ghost" onclick="closeParseLive()">✕ 关闭播放</button>'
+      + '<span id="parseLiveHint" style="font-size:11px;color:var(--dim)"></span>'
+      + '</div></div>'
       + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;max-height:380px;overflow-y:auto;padding:2px">'
-      + (d.images || []).map((u, i) =>
-          '<figure style="margin:0;position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line)">'
-          + '<img src="' + esc(u) + '" loading="lazy" style="width:100%;display:block;cursor:zoom-in" onclick="window.open(\'' + esc(u) + '\')">'
-          + '<a href="' + proxyBase + encodeURIComponent(u) + '" download="album_' + (i + 1) + '.jpg" '
-          + 'style="position:absolute;right:4px;bottom:4px;background:#0009;border-radius:6px;padding:2px 8px;font-size:11px;color:#fff;text-decoration:none">⬇</a>'
-          + '</figure>').join('')
+      + photos.map((p, i) => {
+          const src = p.animated || p.image;
+          return '<figure style="margin:0;position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line)">'
+            + '<img src="' + esc(src) + '" loading="lazy" style="width:100%;display:block;cursor:zoom-in" '
+            + 'onclick="' + (p.video ? 'playParseLive(' + i + ')' : 'openParseImage(' + i + ')') + '">'
+            + (p.video
+                ? '<span style="position:absolute;left:4px;top:4px;background:#000a;border-radius:6px;padding:2px 7px;font-size:11px;color:#fff;cursor:pointer" onclick="playParseLive(' + i + ')">▶ 实况</span>'
+                : (p.animated ? '<span style="position:absolute;left:4px;top:4px;background:#000a;border-radius:6px;padding:2px 7px;font-size:11px;color:#fff">GIF 动图</span>' : ''))
+            + '<div style="position:absolute;right:4px;bottom:4px;display:flex;gap:4px">'
+            + (p.video ? '<a href="' + proxyBase + encodeURIComponent(p.video) + '" download="' + esc(dlName) + '_live_' + (i + 1) + '.mp4" '
+                + 'style="background:#e11d48e6;border-radius:6px;padding:2px 7px;font-size:11px;color:#fff;text-decoration:none">⬇ 视频</a>' : '')
+            + '<a href="' + proxyBase + encodeURIComponent(src) + '" download="' + esc(dlName) + '_' + (i + 1) + parseImgExt(src) + '" '
+            + 'style="background:#0009;border-radius:6px;padding:2px 7px;font-size:11px;color:#fff;text-decoration:none">⬇ 图片</a>'
+            + '</div></figure>';
+        }).join('')
       + '</div>'
       + '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
-      + '<a class="btn sm primary" href="#" onclick="downloadAllParseImages();return false" style="text-decoration:none">⬇ 全部下载（' + d.count + ' 张）</a>'
+      + '<a class="btn sm primary" href="#" onclick="downloadAllParseImages();return false" style="text-decoration:none">⬇ 全部下载（' + photos.length + ' 张）</a>'
+      + (liveCount ? '<a class="btn sm primary" href="#" onclick="downloadAllParseVideos();return false" style="text-decoration:none">🎬 全部下载动态视频（' + liveCount + ' 个）</a>' : '')
       + '<a class="btn sm" href="#" onclick="copyParseImages();return false" style="text-decoration:none">📋 复制全部图片链接</a>'
-      + '</div>';
+      + (liveCount ? '<a class="btn sm" href="#" onclick="copyParseVideos();return false" style="text-decoration:none">📋 复制动态视频链接</a>' : '')
+      + '</div>'
+      + (d.live_hint ? '<div class="hint" style="color:#facc15;margin-top:6px">⚠ ' + esc(d.live_hint) + '</div>' : '');
+    // 有实况图时直接展开动态视频播放器，避免只看到一张静态图
+    if (liveCount) playParseLive(photos.findIndex(p => p.video));
   } else {
     box.innerHTML = head + '<div class="hint">未识别到可展示的内容</div>';
   }
 }
 
-function copyParseImages() {
-  const urls = window._parseImages || [];
-  if (!urls.length) return;
-  const text = urls.join('\n');
+// 按图片 URL 推断下载扩展名（gif / webp / png / jpg）
+function parseImgExt(u) {
+  if (/\.gif/i.test(u)) return '.gif';
+  if (/\.webp/i.test(u)) return '.webp';
+  if (/\.png/i.test(u)) return '.png';
+  return '.jpg';
+}
+
+function openParseImage(i) {
+  const p = (window._parsePhotos || [])[i];
+  const u = p ? (p.animated || p.image) : (window._parseImages || [])[i];
+  if (u) window.open(u);
+}
+
+// 播放实况图（Live Photo）对应的动态视频：直连失败时自动转本服务代理
+function playParseLive(i) {
+  const p = (window._parsePhotos || [])[i];
+  if (!p || !p.video) return;
+  const box = document.getElementById('parseLivePlayer');
+  const v = document.getElementById('parseLiveVideo');
+  if (!box || !v) return;
+  const proxy = (window._parseProxyBase || '/api/proxy?token=' + encodeURIComponent(AUTH_TOKEN || '') + '&u=')
+    + encodeURIComponent(p.video);
+  v.dataset.fallbackDone = '';
+  v.dataset.proxy = proxy;
+  v.poster = p.image || p.animated || '';
+  v.src = p.video;
+  const dl = document.getElementById('parseLiveDl');
+  if (dl) { dl.href = proxy; dl.setAttribute('download', 'live_' + (i + 1) + '.mp4'); }
+  const hint = document.getElementById('parseLiveHint');
+  if (hint) hint.textContent = '▶ 第 ' + (i + 1) + ' 张 · 动态视频' + (p.duration ? ' · ' + fmtDurMs(p.duration) : '');
+  const fbHint = document.getElementById('parseVideoHint');
+  if (fbHint) { fbHint.style.display = 'none'; fbHint.textContent = ''; }
+  box.style.display = 'block';
+  v.play().catch(() => {});
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeParseLive() {
+  const box = document.getElementById('parseLivePlayer');
+  const v = document.getElementById('parseLiveVideo');
+  if (!box || !v) return;
+  v.pause(); v.removeAttribute('src'); v.load();
+  box.style.display = 'none';
+}
+
+function copyParseLinks(text, msg) {
+  if (!text) return;
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(() => toast('已复制 ' + urls.length + ' 个链接', 'ok')).catch(() => {});
+    navigator.clipboard.writeText(text).then(() => toast(msg, 'ok')).catch(() => {});
   } else {
     const ta = document.createElement('textarea');
     ta.value = text; document.body.appendChild(ta); ta.select();
     document.execCommand('copy'); ta.remove();
-    toast('已复制 ' + urls.length + ' 个链接', 'ok');
+    toast(msg, 'ok');
   }
 }
 
-// 图集全部下载：逐张触发代理下载（浏览器会请求"允许多个文件下载"授权）
-function downloadAllParseImages() {
+function copyParseImages() {
   const urls = window._parseImages || [];
-  if (!urls.length) return;
+  copyParseLinks(urls.join('\n'), '已复制 ' + urls.length + ' 个链接');
+}
+
+function copyParseVideos() {
+  const urls = (window._parsePhotos || []).map(p => p.video).filter(Boolean);
+  copyParseLinks(urls.join('\n'), '已复制 ' + urls.length + ' 个动态视频链接');
+}
+
+// 批量下载：逐项触发同源代理（浏览器会请求"允许多个文件下载"授权）
+function batchDownloadParsed(items, doneMsg) {
+  if (!items.length) return;
   const token = AUTH_TOKEN || '';
   let i = 0;
   const tick = () => {
-    if (i >= urls.length) { toast('全部下载已触发：' + urls.length + ' 张', 'ok'); return; }
+    if (i >= items.length) { toast(doneMsg + items.length + ' 个', 'ok'); return; }
     const a = document.createElement('a');
-    a.href = '/api/proxy?token=' + encodeURIComponent(token) + '&u=' + encodeURIComponent(urls[i]);
-    a.download = 'album_' + String(i + 1).padStart(2, '0') + '.jpg';
+    a.href = '/api/proxy?token=' + encodeURIComponent(token) + '&u=' + encodeURIComponent(items[i].url);
+    a.download = items[i].name;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -1715,6 +1799,25 @@ function downloadAllParseImages() {
     setTimeout(tick, 400);
   };
   tick();
+}
+
+function downloadAllParseImages() {
+  const photos = (window._parsePhotos && window._parsePhotos.length)
+    ? window._parsePhotos
+    : (window._parseImages || []).map(u => ({ image: u }));
+  const items = photos.map((p, i) => ({
+    url: p.animated || p.image,
+    name: 'album_' + String(i + 1).padStart(2, '0') + parseImgExt(p.animated || p.image || ''),
+  })).filter(x => x.url);
+  batchDownloadParsed(items, '全部下载已触发：');
+}
+
+function downloadAllParseVideos() {
+  const items = (window._parsePhotos || []).reduce((acc, p, i) => {
+    if (p.video) acc.push({ url: p.video, name: 'album_live_' + String(i + 1).padStart(2, '0') + '.mp4' });
+    return acc;
+  }, []);
+  batchDownloadParsed(items, '动态视频下载已触发：');
 }
 
 // 直连播放被 CDN 拒绝（签名直链绑定解析时出口 IP）时，自动切换本服务代理播放

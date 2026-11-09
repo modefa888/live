@@ -302,9 +302,9 @@ export function createApp(state, services) {
   }));
 
   app.get("/api/parse/video", authMw, ah(async (req, res) => {
-    // 抖音作品解析：视频（无水印直链）/ 图集（图片 + 动图）
+    // 抖音作品解析：视频（无水印直链）/ 图集（图片 + 动图 + 实况图动态视频）
     const text = q1(req, "text");
-    res.json(await parseAweme(text));
+    res.json(await parseAweme(text, { cookie: String(state.config.cookie || "") }));
   }));
 
   app.get("/api/refresh", authMw, ah(async (req, res) => {
