@@ -261,25 +261,88 @@
   .oc-legend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--dim);margin-top:8px}
   .oc-legend i{display:inline-block;width:18px;height:3px;border-radius:2px;
                background:linear-gradient(90deg,#ff3b5c,#ff8a3b);vertical-align:middle;margin-right:5px}
+  /* ---------- 导航头分组（桌面端保持原有靠右排布） ---------- */
+  .hd-brand{display:flex;align-items:center;gap:14px;min-width:0}
+  .hd-title{min-width:0}
+  .hd-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+  #authStatus{margin-left:8px;flex-shrink:0}
+  /* ---------- 移动端：品牌行 + 等宽按钮网格，两行收纳全部导航 ---------- */
+  @media (max-width: 640px) {
+    .wrap{padding:12px 12px 88px}
+    header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 8px;align-items:center;margin-bottom:12px}
+    .hd-brand{grid-column:1;grid-row:1;gap:10px}
+    .hd-brand .logo{width:36px;height:36px;flex:0 0 36px;border-radius:11px;font-size:18px}
+    h1{font-size:16px;white-space:nowrap}
+    .sub{font-size:11px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #authStatus{grid-column:2;grid-row:1;margin-left:0;justify-content:flex-end;min-width:0;font-size:11px;gap:6px}
+    #authStatus .auth-logged-in,#authStatus > span{max-width:108px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #authStatus .btn{margin-left:0!important;padding:4px 8px;font-size:11px}
+    .hd-actions{grid-column:1 / -1;grid-row:2;margin-left:0;gap:6px}
+    .hd-actions .btn{flex:1 1 calc(25% - 5px);min-width:0;justify-content:center;padding:7px 4px;
+                     font-size:12px;gap:3px;white-space:nowrap;border-radius:9px}
+    .hd-actions #addBtn{background:linear-gradient(135deg,#ff3b5c,#ff7a3b);border:none}
+    .statusbar{gap:5px 6px;font-size:11px;margin-bottom:10px}
+    .grid{grid-template-columns:minmax(0,1fr);gap:12px}
+    /* ---------- 详情弹窗：横滑标签栏 + 紧凑内容 ---------- */
+    .modal-mask{padding:8px}
+    .modal{max-height:94vh;border-radius:12px}
+    .modal-head{padding:12px 14px}
+    .modal-head h3{font-size:14px}
+    .modal-body{padding:12px 14px}
+    .tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:2px;margin-bottom:10px}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{flex:0 0 auto;white-space:nowrap;padding:8px 11px;font-size:12px}
+    .tabpage table{table-layout:auto}
+    .tabpage th,.tabpage td{padding:6px 6px;font-size:11px;overflow-wrap:anywhere}
+    .tabpage td.url{max-width:none;word-break:break-all}
+    /* 在线人数：范围按钮一行横滑，统计卡三列 */
+    .oc-toolbar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:5px;margin-bottom:10px;padding-bottom:2px}
+    .oc-toolbar::-webkit-scrollbar{display:none}
+    .oc-toolbar > span:first-child{display:none}
+    .oc-range,.oc-toolbar .btn{flex:0 0 auto;padding:4px 9px;font-size:11px}
+    .oc-toolbar .spacer{display:none}
+    .oc-toolbar .btn{position:sticky;right:0;z-index:1;background:var(--panel2);box-shadow:-8px 0 10px -8px #000c}
+    .oc-range[data-range="all"]{margin-right:52px}
+    .oc-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px}
+    .oc-stat{padding:8px}
+    .oc-stat .k{font-size:10px;margin-bottom:3px}
+    .oc-stat .v{font-size:15px}
+    .oc-stat .v small{display:block;margin-left:0;font-size:9px}
+    .oc-chart{padding:4px}
+    .oc-legend{gap:8px;font-size:10px;margin-top:6px}
+    .hint{font-size:10px}
+    /* 最近日志：时间与级别一行，消息独占一行 */
+    .log-toolbar{gap:5px;margin-bottom:8px}
+    .log-filter{padding:4px 8px;font-size:11px}
+    .log-scope{font-size:10px}
+    #logList{max-height:44vh}
+    #logList .logitem{flex-wrap:wrap;gap:3px 6px;padding:6px}
+    #logList .logitem > .log-time{flex:0 0 auto}
+    #logList .logitem > .log-level{flex:0 0 auto}
+    #logList .log-msg{flex:1 1 100%;min-width:0}
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <div class="logo">📺</div>
-    <div>
-      <h1>抖音直播监控</h1>
-      <div class="sub" id="subInfo">正在连接…</div>
+    <div class="hd-brand">
+      <div class="logo">📺</div>
+      <div class="hd-title">
+        <h1>抖音直播监控</h1>
+        <div class="sub" id="subInfo">正在连接…</div>
+      </div>
     </div>
-    <div class="spacer"></div>
-    <button class="btn" id="addBtn" onclick="openAdd()" style="display:none">➕ 添加主播</button>
-    <button class="btn" id="refreshBtn" onclick="refreshAll()" style="display:none">🔄 刷新</button>
-    <button class="btn" id="recToggle" onclick="toggleRecPanel()" style="display:none">⏺ 录制 <span id="recBadge" style="background:#ff3b5c;border-radius:12px;padding:0 8px;font-size:11px;display:none"></span></button>
-    <button class="btn" onclick="openSquarePanel()" title="热搜榜/直播搜索">🛰 广场</button>
-    <button class="btn" onclick="openUserPanel()" title="解析抖音用户主页资料与作品">👤 主页</button>
-    <button class="btn" onclick="openParsePanel()" title="解析抖音视频/图集分享链接">🎬 解析</button>
-    <a href="/admin.html" class="btn" title="后台管理" style="text-decoration:none;display:none" id="adminBtn">🛠 管理</a>
-    <div id="authStatus" style="display:flex;align-items:center;margin-left:8px"></div>
+    <div class="hd-actions">
+      <button class="btn" id="addBtn" onclick="openAdd()" style="display:none">➕ 添加主播</button>
+      <button class="btn" id="refreshBtn" onclick="refreshAll()" style="display:none">🔄 刷新</button>
+      <button class="btn" id="recToggle" onclick="toggleRecPanel()" style="display:none">⏺ 录制 <span id="recBadge" style="background:#ff3b5c;border-radius:12px;padding:0 8px;font-size:11px;display:none"></span></button>
+      <button class="btn" onclick="openSquarePanel()" title="热搜榜/直播搜索">🛰 广场</button>
+      <button class="btn" onclick="openUserPanel()" title="解析抖音用户主页资料与作品">👤 主页</button>
+      <button class="btn" onclick="openParsePanel()" title="解析抖音视频/图集分享链接">🎬 解析</button>
+      <a href="/admin.html" class="btn" title="后台管理" style="text-decoration:none;display:none" id="adminBtn">🛠 管理</a>
+    </div>
+    <div id="authStatus" style="display:flex;align-items:center"></div>
   </header>
 
   <!-- 启动占位：认证完成前显示，避免闪现登录态/游客态 -->
@@ -1588,7 +1651,13 @@ async function showRecordHistory() {
 }
 
 // ================= 在线人数曲线 =================
-const OC = { w: 720, h: 250, l: 62, r: 14, t: 16, b: 30 };
+const OC_DESKTOP = { w: 720, h: 250, l: 62, r: 14, t: 16, b: 30 };
+const OC_MOBILE = { w: 360, h: 200, l: 46, r: 10, t: 12, b: 24 };
+let OC = { ...OC_DESKTOP };
+// 窄屏改用更小的 viewBox，避免 SVG 等比缩小后刻度文字看不清
+function syncOcMetrics() {
+  OC = (window.innerWidth <= 640) ? { ...OC_MOBILE } : { ...OC_DESKTOP };
+}
 let ONLINE_RANGE = '24h';
 let ONLINE_SEQ = 0;        // 请求序号：只渲染最后一次请求，避免快速切换范围时旧数据覆盖
 let ONLINE_POINTS = [];
@@ -1673,6 +1742,7 @@ function renderOnlineChart(d) {
 }
 
 function buildOnlineSvg(d) {
+  syncOcMetrics();
   const pts = ONLINE_POINTS;
   const { w, h, l, r, t, b } = OC;
   const pw = w - l - r, ph = h - t - b;
@@ -1691,7 +1761,7 @@ function buildOnlineSvg(d) {
   const span = to - from;
   const x = ts => l + (ts - from) / span * pw;
   const y = c => t + ph - Math.min(Math.max(c, 0), maxY) / maxY * ph;
-  ONLINE_VIEW = { from, to, span, x, y, pts, maxY, pw, ph };
+  ONLINE_VIEW = { from, to, span, x, y, pts, maxY, pw, ph, w: OC.w, h: OC.h, l: OC.l };
 
   let grid = '';
   for (let i = 0; i <= 4; i++) {
@@ -1763,8 +1833,8 @@ function bindOnlineHover() {
   hit.addEventListener('mousemove', e => {
     const rect = svg.getBoundingClientRect();
     if (!rect.width) return;
-    const vx = (e.clientX - rect.left) * OC.w / rect.width;
-    const ts = v.from + (vx - OC.l) / v.pw * v.span;
+    const vx = (e.clientX - rect.left) * v.w / rect.width;
+    const ts = v.from + (vx - v.l) / v.pw * v.span;
     let best = 0, diff = Infinity;
     for (let i = 0; i < v.pts.length; i++) {
       const delta = Math.abs(v.pts[i].ts - ts);
@@ -1779,7 +1849,7 @@ function bindOnlineHover() {
     dot.setAttribute('visibility', 'visible');
     tip.innerHTML = `<div>${esc(ocFmtTime(p.ts, true))}</div><div>在线 <b>${esc(ocNum(p.count))}</b> 人${p.exact === 1 ? '' : ' <span style="color:#eab308">(分档值)</span>'}${p.like_count ? ' · 👍 ' + esc(ocNum(p.like_count)) : ''}</div>`;
     tip.classList.add('show');
-    const cxPx = cx / OC.w * rect.width, cyPx = cy / OC.h * rect.height;
+    const cxPx = cx / v.w * rect.width, cyPx = cy / v.h * rect.height;
     tip.style.left = Math.min(Math.max(cxPx + 12, 4), Math.max(4, chart.clientWidth - tip.offsetWidth - 4)) + 'px';
     tip.style.top = Math.max(4, cyPx - tip.offsetHeight - 10) + 'px';
   });

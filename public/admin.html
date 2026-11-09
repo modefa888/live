@@ -185,25 +185,98 @@
   .nctoggle{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer}
   .nctoggle input{width:auto}
   .nctestbtn{margin-top:10px}
+  /* ---------- 导航头分组（桌面端保持靠右排布） ---------- */
+  .hd-brand{display:flex;align-items:center;gap:14px;min-width:0}
+  .hd-title{min-width:0}
+  .hd-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+  #authStatus{margin-left:8px;flex-shrink:0}
+  /* ---------- 移动端：单列布局 + 横向标签导航 + 可横滚表格 ---------- */
+  @media (max-width: 640px) {
+    html,body{height:auto;min-height:100%;overflow:auto}
+    .wrap{height:auto;min-height:100vh;padding:12px 12px 24px}
+    header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 8px;align-items:center;margin-bottom:12px}
+    .hd-brand{grid-column:1;grid-row:1;gap:10px}
+    .hd-brand .logo{width:36px;height:36px;flex:0 0 36px;border-radius:11px;font-size:18px}
+    h1{font-size:16px;white-space:nowrap}
+    .sub{font-size:11px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #authStatus{grid-column:2;grid-row:1;margin-left:0;justify-content:flex-end;font-size:11px;gap:6px}
+    #authStatus .btn{padding:4px 8px;font-size:11px}
+    .hd-actions{grid-column:1 / -1;grid-row:2;margin-left:0;gap:6px}
+    .hd-actions .btn{flex:1 1 calc(25% - 5px);min-width:0;justify-content:center;padding:7px 4px;
+                     font-size:12px;gap:3px;white-space:nowrap;border-radius:9px}
+    .hd-actions > span{display:none}
+    /* 侧边栏 → 横向可滑动标签条 */
+    .layout,.layout.collapsed{display:flex;flex-direction:column;gap:10px;overflow:visible;min-height:0}
+    .sidebar,.layout.collapsed .sidebar{flex:0 0 auto;flex-direction:row;align-items:center;gap:6px;
+      padding:8px;overflow-x:auto;overflow-y:hidden;white-space:nowrap}
+    .sidebar-head,.layout.collapsed .sidebar-head{display:none}
+    #sidebarList{display:flex;gap:6px;flex:0 0 auto}
+    .sidebar .sidebar-item,.layout.collapsed .sidebar-item{flex:0 0 auto;width:auto;margin:0!important;
+      padding:7px 10px!important;border:1px solid var(--line)!important;background:var(--panel2);
+      text-align:left;white-space:nowrap;font-size:12px}
+    .layout.collapsed .sidebar-item span{display:inline}
+    .layout.collapsed .sidebar-item::before{content:none}
+    .sidebar-item .cnt{margin-left:6px}
+    /* 主面板改为自然高度，随页面滚动 */
+    .main-panel{padding:12px;overflow:visible}
+    #dashboardView{overflow:visible;padding-right:0}
+    #tableView,#tableContent{overflow:visible}
+    .panel-head{gap:8px}
+    .panel-head h3{font-size:14px}
+    .search-box{flex:1 1 100%;max-width:none}
+    .toolbar{gap:6px}
+    .toolbar-right{margin-left:0}
+    /* 表格按内容展开，横向滑动查看所有列 */
+    .table-wrap{max-height:60vh;overflow:auto;-webkit-overflow-scrolling:touch;box-shadow:inset -12px 0 12px -12px #000a}
+    table{table-layout:auto;width:auto;min-width:100%}
+    th,td{min-width:80px;white-space:nowrap;padding:8px 10px}
+    th:first-child,td:first-child{min-width:44px}
+    th:last-child,td:last-child{min-width:110px}
+    td.val{white-space:normal;min-width:140px;max-width:220px}
+    .pagination{gap:4px}
+    .pagination .btn{padding:5px 8px;font-size:11px}
+    .pagination .info{font-size:10px;margin:0 4px}
+    /* 仪表盘卡片与图表单列 */
+    .mini-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+    .dash-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+    .chart-row{flex-direction:column;gap:10px}
+    .chart-panel{min-width:0!important;width:100%}
+    /* 弹窗、标签页、通知中心 */
+    .modal-mask{padding:8px}
+    .modal{max-height:94vh;border-radius:12px}
+    .modal-head{padding:12px 14px}
+    .modal-body{padding:12px 14px}
+    .tabs{flex-wrap:nowrap;overflow-x:auto}
+    .tab{padding:8px 10px;font-size:12px}
+    .edit-row{flex-direction:column;gap:4px}
+    .edit-row .col-key{width:auto;padding-top:0}
+    .nchead{flex-wrap:wrap}
+    .ncrow{flex-direction:column}
+    #toasts{left:8px;right:8px;top:8px}
+    .toast{min-width:0;max-width:none}
+  }
 </style>
 </head>
 <body class="locked">
 <div id="toasts"></div>
 <div class="wrap">
   <header>
-    <div class="logo">📊</div>
-    <div>
-      <h1>后台管理</h1>
-      <div class="sub">数据库管理 · 抖音直播监控</div>
+    <div class="hd-brand">
+      <div class="logo">📊</div>
+      <div class="hd-title">
+        <h1>后台管理</h1>
+        <div class="sub">数据库管理 · 抖音直播监控</div>
+      </div>
     </div>
-    <div class="spacer"></div>
+    <div class="hd-actions">
+      <button class="btn" onclick="openSettings()" title="监控设置">⚙️ 设置</button>
+      <button class="btn" onclick="openBackupCenter()" title="备份/回档">📦 备份</button>
+      <button class="btn" onclick="openNotifyCenter()" title="通知中心">🔔 通知</button>
+      <span class="db-badge" style="font-size:12px;padding:4px 10px;border-radius:8px;background:#3b82f622;color:#3b82f6;font-weight:600">🔷 MongoDB</span>
+      <span id="dbStatus" style="font-size:11px;color:var(--dim);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+      <a href="/" class="btn ghost" title="返回主页" style="text-decoration:none">← 主页</a>
+    </div>
     <div id="authStatus"></div>
-    <button class="btn" onclick="openSettings()" title="监控设置">⚙️ 设置</button>
-    <button class="btn" onclick="openBackupCenter()" title="备份/回档">📦 备份</button>
-    <button class="btn" onclick="openNotifyCenter()" title="通知中心">🔔 通知</button>
-    <span style="font-size:12px;padding:4px 10px;border-radius:8px;background:#3b82f622;color:#3b82f6;font-weight:600">🔷 MongoDB</span>
-    <span id="dbStatus" style="font-size:11px;color:var(--dim);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-    <a href="/" class="btn ghost" title="返回主页" style="text-decoration:none">← 主页</a>
   </header>
 
   <div class="layout">
