@@ -144,11 +144,29 @@
            display:inline-flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;transition:.15s;line-height:1}
   .recstop:hover{border-color:#ff3b5c;color:#ff3b5c;background:#221019}
   @keyframes blink{50%{opacity:.3}}
-  .logitem{font-size:11px;padding:4px 0;border-bottom:1px dashed var(--line);color:var(--dim);display:flex;gap:8px;align-items:flex-start}
+  .logitem{font-size:11px;padding:6px 8px;border-bottom:1px dashed var(--line);color:var(--dim);
+           display:flex;gap:8px;align-items:flex-start;line-height:1.6}
+  .logitem:last-child{border-bottom:none}
+  .logitem:nth-child(even){background:#ffffff04}
+  .logitem:hover{background:#ffffff09}
   .logitem .lv-error{color:#ff6b81}.logitem .lv-warn{color:#facc15}.logitem .lv-info{color:#7dd3fc}
-  .logitem .log-streamer{color:#a78bfa;font-weight:600;flex-shrink:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .logitem .log-sys{color:#64748b;font-weight:600;flex-shrink:0}
-  .logitem .log-msg{flex:1;line-height:1.5}
+  .logitem > .log-time{flex:0 0 76px;white-space:nowrap;color:#8b98b8;font-variant-numeric:tabular-nums}
+  .logitem > .log-level{flex:0 0 46px;white-space:nowrap;font-weight:600}
+  .logitem .log-streamer{color:#a78bfa;font-weight:600;flex:0 0 auto;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .logitem .log-sys{color:#64748b;font-weight:600;flex:0 0 30px}
+  .logitem .log-msg{flex:1;min-width:0;line-height:1.6;word-break:break-word;overflow-wrap:anywhere;white-space:pre-wrap}
+  .logitem .log-msg.collapsible{cursor:pointer}
+  .log-more{color:var(--blue);margin-left:6px;white-space:nowrap}
+  /* ---------- 最近日志工具条 ---------- */
+  .log-toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .log-filter{background:var(--panel2);border:1px solid var(--line);color:var(--dim);border-radius:8px;
+              padding:4px 10px;font-size:12px;cursor:pointer;transition:.15s}
+  .log-filter:hover{border-color:#4a5a85;color:var(--txt)}
+  .log-filter.active{background:#ff3b5c22;border-color:var(--accent);color:var(--accent);font-weight:600}
+  .log-scope{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--dim);white-space:nowrap;margin:0}
+  .log-scope input{width:auto;margin:0}
+  .log-count{font-size:11px;color:var(--dim);margin-left:auto;white-space:nowrap}
+  #logList{max-height:340px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;background:#0f142055}
   .switch{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--dim)}
   .switch input{width:auto}
   .radio-switch{display:flex;align-items:center;padding:8px 12px;margin-top:8px;background:var(--bg);border:1px solid var(--line);border-radius:8px;cursor:pointer;user-select:none;transition:border-color .2s}
@@ -219,6 +237,30 @@
   *::-webkit-scrollbar-thumb{background:var(--line,#2a3554);border-radius:3px}
   *::-webkit-scrollbar-thumb:hover{background:#3a4a70}
   *{scrollbar-width:thin;scrollbar-color:var(--line,#2a3554) transparent}
+  /* ---------- 在线人数曲线 ---------- */
+  .oc-toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .oc-range{background:var(--panel2);border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:5px 11px;font-size:12px;cursor:pointer;transition:.15s}
+  .oc-range:hover{border-color:#4a5a85;color:var(--txt)}
+  .oc-range.active{background:#ff3b5c22;border-color:var(--accent);color:var(--accent);font-weight:600}
+  .oc-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;margin-bottom:12px}
+  .oc-stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px}
+  .oc-stat .k{font-size:11px;color:var(--dim);margin-bottom:5px;white-space:nowrap}
+  .oc-stat .v{font-size:17px;font-weight:700;line-height:1.2;white-space:nowrap}
+  .oc-stat .v small{font-size:11px;font-weight:400;color:var(--dim);margin-left:3px;white-space:nowrap}
+  .oc-chart{position:relative;background:linear-gradient(180deg,#141c2e,#0f1420);border:1px solid var(--line);
+            border-radius:12px;padding:6px 6px 2px;user-select:none}
+  .oc-chart svg{display:block;width:100%;height:auto}
+  .oc-tip{position:absolute;display:none;pointer-events:none;background:#0b1020f2;border:1px solid #3d4d7a;
+          border-radius:8px;padding:6px 10px;font-size:11px;line-height:1.7;white-space:nowrap;
+          color:var(--txt);box-shadow:0 6px 18px #0009;z-index:3}
+  .oc-tip.show{display:block}
+  .oc-tip b{color:#ff8a9f}
+  .oc-empty{min-height:210px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            gap:8px;color:var(--dim);font-size:13px;text-align:center;padding:16px}
+  .oc-empty .big{font-size:34px;opacity:.6}
+  .oc-legend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--dim);margin-top:8px}
+  .oc-legend i{display:inline-block;width:18px;height:3px;border-radius:2px;
+               background:linear-gradient(90deg,#ff3b5c,#ff8a3b);vertical-align:middle;margin-right:5px}
 </style>
 </head>
 <body>
@@ -457,6 +499,7 @@
       <div class="tabs">
         <div class="tab active" onclick="tab(this,'tabStreams')">直播源</div>
         <div class="tab" onclick="tab(this,'tabCmds')">播放命令</div>
+        <div class="tab" onclick="tab(this,'tabOnline')">在线人数</div>
         <div class="tab" onclick="tab(this,'tabHistory')">开播历史</div>
         <div class="tab" onclick="tab(this,'tabRecords')">录播记录</div>
         <div class="tab" onclick="tab(this,'tabLog')">最近日志</div>
@@ -464,9 +507,38 @@
       </div>
       <div class="tabpage active" id="tabStreams"></div>
       <div class="tabpage" id="tabCmds"></div>
+      <div class="tabpage" id="tabOnline">
+        <div class="oc-toolbar">
+          <span style="font-size:12px;color:var(--dim);margin-right:2px">时间范围</span>
+          <button class="oc-range" data-range="1h" onclick="setOnlineRange('1h')">1 小时</button>
+          <button class="oc-range" data-range="6h" onclick="setOnlineRange('6h')">6 小时</button>
+          <button class="oc-range active" data-range="24h" onclick="setOnlineRange('24h')">24 小时</button>
+          <button class="oc-range" data-range="7d" onclick="setOnlineRange('7d')">7 天</button>
+          <button class="oc-range" data-range="30d" onclick="setOnlineRange('30d')">30 天</button>
+          <button class="oc-range" data-range="all" onclick="setOnlineRange('all')">全部</button>
+          <span class="spacer"></span>
+          <button class="btn sm" onclick="loadOnlineChart()">🔄 刷新</button>
+        </div>
+        <div class="oc-stats" id="ocStats"></div>
+        <div class="oc-chart" id="ocChart"><div class="oc-empty">加载中…</div></div>
+        <div class="oc-legend"><span><i></i>在线人数（每次监控刷新采样一次）</span><span id="ocUpdated"></span></div>
+        <div class="hint">人数取抖音未分档的精确值（如 482），显示完整数字；<code>400+</code> 这类展示分档值会单独标注。数据保存在 MongoDB <code>online_samples</code> 集合，按分钟去重、保留 90 天；未开播时段不采样，曲线会在此断开。</div>
+      </div>
       <div class="tabpage" id="tabHistory"></div>
       <div class="tabpage" id="tabRecords"></div>
       <div class="tabpage" id="tabLog">
+        <div class="log-toolbar">
+          <button class="log-filter active" data-type="all" onclick="setLogType('all')">全部</button>
+          <button class="log-filter" data-type="live" onclick="setLogType('live')">开播/下播</button>
+          <button class="log-filter" data-type="fudai" onclick="setLogType('fudai')">福袋</button>
+          <button class="log-filter" data-type="notify" onclick="setLogType('notify')">通知</button>
+          <button class="log-filter" data-type="http" onclick="setLogType('http')">HTTP 请求</button>
+          <button class="log-filter" data-type="other" onclick="setLogType('other')">其它</button>
+          <button class="log-filter" data-type="warn" onclick="setLogType('warn')">警告/错误</button>
+          <label class="log-scope"><input type="checkbox" id="logAllStreamers" onchange="loadLogs(currentLogSecUid())"> 全部主播</label>
+          <span class="log-count" id="logCount"></span>
+          <button class="btn sm" onclick="loadLogs(currentLogSecUid())">🔄 刷新</button>
+        </div>
         <div id="logList"></div>
       </div>
       <div class="tabpage" id="tabDetailSettings">
@@ -1515,6 +1587,209 @@ async function showRecordHistory() {
   body.innerHTML = html;
 }
 
+// ================= 在线人数曲线 =================
+const OC = { w: 720, h: 250, l: 62, r: 14, t: 16, b: 30 };
+let ONLINE_RANGE = '24h';
+let ONLINE_SEQ = 0;        // 请求序号：只渲染最后一次请求，避免快速切换范围时旧数据覆盖
+let ONLINE_POINTS = [];
+let ONLINE_VIEW = null;    // 坐标换算参数（供悬浮提示使用）
+let ONLINE_ID = '';
+
+function setOnlineRange(range) {
+  ONLINE_RANGE = range;
+  loadOnlineChart();
+}
+
+function ocReset(text) {
+  $('ocStats').innerHTML = '';
+  $('ocChart').innerHTML = `<div class="oc-empty"><div class="big">📈</div><div>${esc(text)}</div></div>`;
+  $('ocUpdated').textContent = '';
+  ONLINE_POINTS = [];
+  ONLINE_VIEW = null;
+}
+
+async function loadOnlineChart() {
+  const id = currentDetail?.sec_uid || currentDetail?.web_rid || '';
+  document.querySelectorAll('.oc-range').forEach(b => b.classList.toggle('active', b.dataset.range === ONLINE_RANGE));
+  if (!id) { ocReset('缺少主播 ID'); return; }
+  const seq = ++ONLINE_SEQ;
+  $('ocChart').innerHTML = '<div class="oc-empty">加载中…</div>';
+  let d;
+  try {
+    d = await api('/api/online/stats?id=' + encodeURIComponent(id) + '&range=' + encodeURIComponent(ONLINE_RANGE));
+  } catch (e) {
+    if (seq === ONLINE_SEQ) ocReset('加载失败：' + (e.message || '网络异常'));
+    return;
+  }
+  if (seq !== ONLINE_SEQ || !d) return;
+  if (d.error) { ocReset(d.error); return; }
+  renderOnlineChart(d);
+}
+
+function ocFmtTime(ts, withDate) {
+  const d = new Date(ts * 1000), p = n => String(n).padStart(2, '0');
+  const hm = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  return withDate ? `${p(d.getMonth() + 1)}-${p(d.getDate())} ${hm}` : hm;
+}
+
+function ocNiceMax(v) {
+  if (v <= 5) return 5;
+  const exp = Math.pow(10, Math.floor(Math.log10(v)));
+  const n = v / exp;
+  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+  return step * exp;
+}
+
+// 完整显示人数（千分位），不再缩写为 "1.2万"、也不取整到整百
+function ocNum(n) {
+  if (n === null || n === undefined || n === '' || !Number.isFinite(Number(n))) return '-';
+  return Number(n).toLocaleString('zh-CN');
+}
+
+function renderOnlineChart(d) {
+  ONLINE_POINTS = (d.points || []).filter(p => Number.isFinite(p.ts) && Number.isFinite(p.count));
+  const last = ONLINE_POINTS[ONLINE_POINTS.length - 1];
+  const cards = [
+    ['当前在线', d.live ? ocNum(d.current ?? (last ? last.count : null)) : '—', d.live ? (d.current_exact ? '精确值' : '分档值') : '未开播'],
+    ['区间峰值', ocNum(d.peak), '人'],
+    ['区间均值', ocNum(d.avg), '人'],
+    ['区间最低', ocNum(d.min), '人'],
+    ['采样点', ocNum(d.samples), '个'],
+    ['当前点赞', ocNum(d.like_count), Number(d.like_delta) > 0 ? '+' + ocNum(d.like_delta) : '次'],
+  ];
+  $('ocStats').innerHTML = cards.map(c =>
+    `<div class="oc-stat"><div class="k">${c[0]}</div><div class="v">${esc(c[1])}<small>${esc(c[2])}</small></div></div>`
+  ).join('');
+  if (!ONLINE_POINTS.length) {
+    $('ocChart').innerHTML = `<div class="oc-empty"><div class="big">📈</div><div>该时间范围内暂无在线人数数据</div>
+      <div class="hint" style="max-width:420px">监控每次刷新（默认 ${esc(ocNum(d.interval))} 秒）会记录一个采样点，开播后稍等片刻再查看。</div></div>`;
+    $('ocUpdated').textContent = '';
+    ONLINE_VIEW = null;
+    return;
+  }
+  $('ocChart').innerHTML = buildOnlineSvg(d) + '<div class="oc-tip" id="ocTip"></div>';
+  $('ocUpdated').textContent = (d.approx ? `⚠ ${d.approx} 个旧采样为 400+ 式分档值 · ` : '') + '最新采样 ' + ocFmtTime(last.ts, true);
+  bindOnlineHover();
+}
+
+function buildOnlineSvg(d) {
+  const pts = ONLINE_POINTS;
+  const { w, h, l, r, t, b } = OC;
+  const pw = w - l - r, ph = h - t - b;
+  let from = Number(d.from) || pts[0].ts;
+  let to = Number(d.to) || pts[pts.length - 1].ts;
+  const dataFrom = pts[0].ts, dataTo = pts[pts.length - 1].ts;
+  // 数据只占所选窗口的一小段时（例如刚启用、或只播了 1 小时），收缩 X 轴避免曲线挤成一条竖线
+  if (to > from && dataTo > dataFrom && (dataTo - dataFrom) < (to - from) * 0.2) {
+    const pad = Math.max(60, (dataTo - dataFrom) * 0.05);
+    from = dataFrom - pad;
+    to = dataTo + pad;
+  }
+  // 单点或时间窗口退化时，左右各留 30 分钟，保证点可见
+  if (pts.length === 1 || to - from < 60) { from = pts[0].ts - 1800; to = pts[0].ts + 1800; }
+  const maxY = ocNiceMax(Math.max(1, ...pts.map(p => p.count)) * 1.15);
+  const span = to - from;
+  const x = ts => l + (ts - from) / span * pw;
+  const y = c => t + ph - Math.min(Math.max(c, 0), maxY) / maxY * ph;
+  ONLINE_VIEW = { from, to, span, x, y, pts, maxY, pw, ph };
+
+  let grid = '';
+  for (let i = 0; i <= 4; i++) {
+    const gy = t + ph - i * ph / 4;
+    grid += `<line x1="${l}" y1="${gy.toFixed(1)}" x2="${w - r}" y2="${gy.toFixed(1)}" stroke="#2a3554" stroke-width="1" ${i ? 'stroke-dasharray="3 5"' : ''}/>`
+      + `<text x="${l - 8}" y="${(gy + 4).toFixed(1)}" fill="#8b98b8" font-size="10" text-anchor="end">${esc(ocNum(Math.round(maxY * i / 4)))}</text>`;
+  }
+  const showDate = span > 86400;
+  let xaxis = '';
+  for (let i = 0; i <= 4; i++) {
+    const gx = l + i * pw / 4;
+    xaxis += `<line x1="${gx.toFixed(1)}" y1="${t}" x2="${gx.toFixed(1)}" y2="${t + ph}" stroke="#2a3554" stroke-width="1" stroke-dasharray="3 6" opacity="0.5"/>`
+      + `<text x="${gx.toFixed(1)}" y="${h - 8}" fill="#8b98b8" font-size="10" text-anchor="${i === 0 ? 'start' : i === 4 ? 'end' : 'middle'}">${esc(ocFmtTime(from + i * span / 4, showDate))}</text>`;
+  }
+
+  // 间隔过大的两点之间断开（下播 / 风控 / 服务停止期间没有采样）
+  // 阈值自适应：以采样点间隔的中位数为基准，避免刷新间隔调大后整条曲线变成散点
+  const diffs = [];
+  for (let i = 1; i < pts.length; i++) diffs.push(pts[i].ts - pts[i - 1].ts);
+  diffs.sort((a, b) => a - b);
+  const typical = diffs.length ? diffs[Math.floor(diffs.length / 2)] : (Number(d.interval) || 60);
+  const gap = Math.max(300, typical * 4, (Number(d.interval) || 60) * 3);
+  const segments = [];
+  let seg = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    if (pts[i].ts - pts[i - 1].ts > gap) { segments.push(seg); seg = []; }
+    seg.push(pts[i]);
+  }
+  segments.push(seg);
+
+  let line = '', area = '', dots = '';
+  const baseY = (t + ph).toFixed(1);
+  for (const s of segments) {
+    const coords = s.map(p => `${x(p.ts).toFixed(1)},${y(p.count).toFixed(1)}`);
+    if (s.length === 1) {
+      dots += `<circle cx="${x(s[0].ts).toFixed(1)}" cy="${y(s[0].count).toFixed(1)}" r="3" fill="#ff8a3b"/>`;
+      continue;
+    }
+    line += `<path d="M${coords.join(' L')}" fill="none" stroke="url(#ocLine)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    area += `<path d="M${x(s[0].ts).toFixed(1)},${baseY} L${coords.join(' L')} L${x(s[s.length - 1].ts).toFixed(1)},${baseY} Z" fill="url(#ocFill)"/>`;
+  }
+
+  let peakIdx = 0;
+  pts.forEach((p, i) => { if (p.count > pts[peakIdx].count) peakIdx = i; });
+  const px = x(pts[peakIdx].ts), py = y(pts[peakIdx].count);
+  const peakMark = `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="3.5" fill="#ff8a3b" stroke="#1a2236" stroke-width="1.5"/>`
+    + `<text x="${Math.min(Math.max(px, l + 30), w - r - 30).toFixed(1)}" y="${Math.max(py - 10, t + 10).toFixed(1)}" fill="#ffb27a" font-size="10" text-anchor="middle">峰值 ${esc(ocNum(pts[peakIdx].count))}${pts[peakIdx].exact === 1 ? '' : '+'}</text>`;
+  const lastP = pts[pts.length - 1];
+  const lastMark = `<circle cx="${x(lastP.ts).toFixed(1)}" cy="${y(lastP.count).toFixed(1)}" r="5.5" fill="#ff3b5c" opacity="0.22"/>`
+    + `<circle cx="${x(lastP.ts).toFixed(1)}" cy="${y(lastP.count).toFixed(1)}" r="2.8" fill="#ff3b5c"/>`;
+
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="在线人数曲线">
+    <defs>
+      <linearGradient id="ocLine" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff3b5c"/><stop offset="1" stop-color="#ff8a3b"/></linearGradient>
+      <linearGradient id="ocFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff3b5c" stop-opacity="0.35"/><stop offset="1" stop-color="#ff3b5c" stop-opacity="0"/></linearGradient>
+    </defs>
+    ${grid}${xaxis}${area}${line}${dots}${peakMark}${lastMark}
+    <line id="ocCursor" x1="0" y1="${t}" x2="0" y2="${t + ph}" stroke="#ff8a9f" stroke-width="1" stroke-dasharray="4 4" visibility="hidden"/>
+    <circle id="ocDot" r="4.5" fill="#fff" stroke="#ff3b5c" stroke-width="2" visibility="hidden"/>
+    <rect id="ocHit" x="${l}" y="${t}" width="${pw}" height="${ph}" fill="transparent" pointer-events="all" style="cursor:crosshair"/>
+  </svg>`;
+}
+
+function bindOnlineHover() {
+  const chart = $('ocChart'), svg = chart.querySelector('svg');
+  const hit = $('ocHit'), tip = $('ocTip'), cursor = $('ocCursor'), dot = $('ocDot');
+  const v = ONLINE_VIEW;
+  if (!svg || !hit || !tip || !cursor || !dot || !v) return;
+  hit.addEventListener('mousemove', e => {
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width) return;
+    const vx = (e.clientX - rect.left) * OC.w / rect.width;
+    const ts = v.from + (vx - OC.l) / v.pw * v.span;
+    let best = 0, diff = Infinity;
+    for (let i = 0; i < v.pts.length; i++) {
+      const delta = Math.abs(v.pts[i].ts - ts);
+      if (delta < diff) { diff = delta; best = i; }
+    }
+    const p = v.pts[best], cx = v.x(p.ts), cy = v.y(p.count);
+    cursor.setAttribute('x1', cx);
+    cursor.setAttribute('x2', cx);
+    cursor.setAttribute('visibility', 'visible');
+    dot.setAttribute('cx', cx);
+    dot.setAttribute('cy', cy);
+    dot.setAttribute('visibility', 'visible');
+    tip.innerHTML = `<div>${esc(ocFmtTime(p.ts, true))}</div><div>在线 <b>${esc(ocNum(p.count))}</b> 人${p.exact === 1 ? '' : ' <span style="color:#eab308">(分档值)</span>'}${p.like_count ? ' · 👍 ' + esc(ocNum(p.like_count)) : ''}</div>`;
+    tip.classList.add('show');
+    const cxPx = cx / OC.w * rect.width, cyPx = cy / OC.h * rect.height;
+    tip.style.left = Math.min(Math.max(cxPx + 12, 4), Math.max(4, chart.clientWidth - tip.offsetWidth - 4)) + 'px';
+    tip.style.top = Math.max(4, cyPx - tip.offsetHeight - 10) + 'px';
+  });
+  hit.addEventListener('mouseleave', () => {
+    tip.classList.remove('show');
+    cursor.setAttribute('visibility', 'hidden');
+    dot.setAttribute('visibility', 'hidden');
+  });
+}
+
 // ================= 详情 =================
 async function showDetail(id) {
   $('detailMask').classList.add('show');
@@ -1522,6 +1797,12 @@ async function showDetail(id) {
   if (d.error) { $('detailTitle').textContent = '错误'; $('tabStreams').innerHTML = '<p>' + esc(d.error) + '</p>'; return; }
   currentDetail = d;
   $('detailTitle').textContent = (d.nickname || '') + ' 的详情';
+  // 切换主播时重置曲线，避免残留上一位主播的数据
+  ONLINE_SEQ++;
+  const oid = d.sec_uid || d.web_rid || '';
+  if (oid !== ONLINE_ID) { ONLINE_ID = oid; ocReset('加载中…'); LOG_ALL = []; }
+  if ($('tabOnline').classList.contains('active')) loadOnlineChart();
+  if ($('tabLog').classList.contains('active')) loadLogs(oid);
   const streams = d.room?.streams || [];
   $('tabStreams').innerHTML = streams.length ? `
     <table>
@@ -1625,19 +1906,80 @@ function tab(el, id) {
     const sec_uid = currentDetail?.sec_uid || currentDetail?.web_rid || '';
     loadLogs(sec_uid);
   }
+  if (id === 'tabOnline') loadOnlineChart();
 }
+
+// ================= 最近日志 =================
+let LOG_ALL = [];
+let LOG_TYPE = 'all';
+
+function currentLogSecUid() {
+  return currentDetail?.sec_uid || currentDetail?.web_rid || '';
+}
+
+function setLogType(type) {
+  LOG_TYPE = type;
+  document.querySelectorAll('.log-filter').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+  renderLogs();
+}
+
+// 按 event_type / 消息前缀归类；HTTP 请求单独成一类，避免淹没开播、福袋等关键日志
+function logCategory(l) {
+  const msg = String(l.msg || '');
+  const et = String(l.event_type || '');
+  if (/^\[HTTP\]/.test(msg) || et === 'http') return 'http';
+  if (et.includes('fudai') || msg.includes('福袋')) return 'fudai';
+  if (et.startsWith('notify_')) return 'notify';
+  if (et.startsWith('live_') || /开播|下播/.test(msg)) return 'live';
+  return 'other';
+}
+
+function toggleLogMsg(el) {
+  const expanded = el.dataset.expanded === '1';
+  el.innerHTML = (expanded ? esc(el.dataset.short) : esc(el.dataset.full))
+    + `<span class="log-more">${expanded ? '展开' : '收起'}</span>`;
+  el.dataset.expanded = expanded ? '0' : '1';
+}
+
+function renderLogs() {
+  const list = $('logList');
+  if (!list) return;
+  let rows = LOG_ALL.slice();
+  if (LOG_TYPE === 'warn') rows = rows.filter(l => l.level === 'warn' || l.level === 'error');
+  else if (LOG_TYPE !== 'all') rows = rows.filter(l => logCategory(l) === LOG_TYPE);
+  $('logCount').textContent = `显示 ${rows.length} / ${LOG_ALL.length} 条`;
+  if (!rows.length) {
+    list.innerHTML = '<div class="hint" style="padding:24px;text-align:center">该类型暂无日志</div>';
+    return;
+  }
+  const nick = {};
+  STREAMERS.forEach(s => { nick[s.sec_uid] = s.nickname; nick[s.web_rid] = s.nickname; });
+  list.innerHTML = rows.map(l => {
+    const st = l.sec_uid ? (nick[l.sec_uid] || l.sec_uid) : null;
+    const tag = st
+      ? `<span class="log-streamer" title="${esc(st)}">${esc(st)}</span>`
+      : '<span class="log-sys">系统</span>';
+    const level = String(l.level || 'info');
+    const msg = String(l.msg || '');
+    // 长 HTTP URL 默认折叠成一行，点击可展开看完整地址
+    const long = msg.length > 160;
+    const short = long ? msg.slice(0, 160) + '…' : msg;
+    const attrs = long ? `data-full="${esc(msg)}" data-short="${esc(short)}" onclick="toggleLogMsg(this)"` : '';
+    return `<div class="logitem">`
+      + `<span class="log-time">${esc(fmtTime(l.ts))}</span>`
+      + `<span class="log-level lv-${esc(level)}">[${esc(level)}]</span>${tag}`
+      + `<span class="log-msg ${long ? 'collapsible' : ''}" ${attrs}>${esc(short)}${long ? '<span class="log-more">展开</span>' : ''}</span>`
+      + `</div>`;
+  }).join('');
+}
+
 async function loadLogs(sec_uid) {
-  const qs = sec_uid ? `?sec_uid=${encodeURIComponent(sec_uid)}` : '';
+  // 默认只看当前主播；勾选「全部主播」后不带 sec_uid，系统日志也能看到
+  const all = $('logAllStreamers')?.checked;
+  const qs = !all && sec_uid ? `?sec_uid=${encodeURIComponent(sec_uid)}` : '';
   const d = await api('/api/logs' + qs);
-  const streamerNickname = {};
-  STREAMERS.forEach(s => { streamerNickname[s.sec_uid] = s.nickname; streamerNickname[s.web_rid] = s.nickname; });
-  const logList = $('logList');
-  if (!logList) return;
-  logList.innerHTML = (d.logs||[]).slice().reverse().map(l => {
-    const st = l.sec_uid ? (streamerNickname[l.sec_uid] || l.sec_uid) : null;
-    const tag = st ? `<span class="log-streamer">${esc(st)}</span>` : '<span class="log-sys">系统</span>';
-    return `<div class="logitem"><span>${fmtTime(l.ts)}</span><span class="lv-${esc(l.level)}">[${esc(l.level)}]</span>${tag}<span class="log-msg">${esc(l.msg)}</span></div>`;
-  }).join('') || '<div class="hint">暂无日志</div>';
+  LOG_ALL = (d.logs || []).slice().sort((a, b) => (Number(b.ts) || 0) - (Number(a.ts) || 0));
+  renderLogs();
 }
 
 async function togglePin(id) {

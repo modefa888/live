@@ -4,6 +4,7 @@
 import { MongoClient } from "mongodb";
 import crypto from "node:crypto";
 import { MONGO_URI, MONGO_DB } from "../utils/constants.js";
+import { parseCount } from "../utils/misc.js";
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -50,6 +51,9 @@ export class MongoHistoryDB {
       db.collection("user_streamers").createIndex({ user_id: 1, streamer_id: 1 }, { unique: true }),
       db.collection("history").createIndex({ sec_uid: 1, start_time: 1 }, { unique: true }),
       db.collection("history").createIndex({ start_time: 1 }),
+      // 在线人数采样：同一主播同一分钟只保留一个点；历史数据保留 90 天
+      db.collection("online_samples").createIndex({ sec_uid: 1, minute: 1 }, { unique: true }),
+      db.collection("online_samples").createIndex({ created_at: 1 }, { expireAfterSeconds: 90 * 86400 }),
       db.collection("recordings").createIndex({ file_path: 1 }, { unique: true }),
       db.collection("recordings").createIndex({ sec_uid: 1 }),
       db.collection("recordings").createIndex({ start_time: 1 }),
@@ -300,6 +304,62 @@ export class MongoHistoryDB {
     return rows.map((r) => ({
       id: r.id, sec_uid: r.sec_uid, start_time: r.start_time,
       end_time: r.end_time, create_time: r.create_time, duration: r.duration || 0,
+    }));
+  }
+
+  // ================= 在线人数采样（online_samples） =================
+
+  /** 写入采样点；同一主播同一分钟只保留最后一次（详情页刷新不会刷出一堆重复点） */
+  async saveOnlineSample({ sec_uid = "", web_rid = "", user_count = "", user_count_exact = null, like_count = 0, ts = 0 } = {}) {
+    // 优先用未分档的精确人数；取不到时才解析 "400+" / "1.2万" 这类展示值，并标记为近似
+    const exact = parseCount(user_count_exact);
+    const count = exact ?? parseCount(user_count);
+    if (count === null) return false;
+    const db = await this._ensure();
+    const t = Number(ts) || nowSec();
+    const minute = Math.floor(t / 60);
+    await db.collection("online_samples").updateOne(
+      { sec_uid: String(sec_uid), minute },
+      {
+        $set: {
+          web_rid: String(web_rid || ""),
+          ts: t,
+          count,
+          exact: exact !== null ? 1 : 0,
+          like_count: parseCount(like_count) ?? 0,
+        },
+        $setOnInsert: { created_at: new Date(t * 1000) },
+      },
+      { upsert: true }
+    );
+    return true;
+  }
+
+  /** 按主播 + 时间窗口读取采样点（升序），用于绘制在线人数曲线 */
+  async getOnlineSamples({ secUid = "", webRid = "", since = 0, until = 0, limit = 20000 } = {}) {
+    const db = await this._ensure();
+    const ids = [...new Set([secUid, webRid].filter(Boolean).map(String))];
+    const filter = {};
+    // 早期记录可能只有 web_rid（sec_uid 尚未解析出来），两种标识都能命中
+    if (ids.length) filter.$or = [{ sec_uid: { $in: ids } }, { web_rid: { $in: ids } }];
+    const start = Number(since) || 0;
+    const end = Number(until) || 0;
+    if (start || end) {
+      const range = {};
+      if (start) range.$gte = start;
+      if (end) range.$lte = end;
+      filter.ts = range;
+    }
+    const max = Math.min(Math.max(1, Number(limit) || 20000), 50000);
+    const rows = await db.collection("online_samples")
+      .find(filter, { projection: { ts: 1, count: 1, like_count: 1, exact: 1 } })
+      .sort({ ts: 1 }).limit(max).toArray();
+    return rows.map((r) => ({
+      ts: Number(r.ts) || 0,
+      count: Number(r.count) || 0,
+      like_count: Number(r.like_count) || 0,
+      // 旧数据没有 exact 字段，视为 "400+" 式的分档近似值
+      exact: r.exact === 1 ? 1 : 0,
     }));
   }
 

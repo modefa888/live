@@ -9,6 +9,16 @@ import { httpGetText } from "../utils/httputil.js";
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
+/**
+ * 只接受「未经分档的精确人数」：非负整数或纯数字字符串。
+ * 顶层的 user_count_str 是 "400+" / "1.2万" 这类展示分档值，不是真实人数。
+ */
+function exactCount(v) {
+  if (typeof v === "number") return Number.isInteger(v) && v >= 0 ? v : null;
+  if (typeof v === "string" && /^\d{1,12}$/.test(v.trim())) return Number(v.trim());
+  return null;
+}
+
 /** 去重保序：等价于 Python list(dict.fromkeys([...])) */
 function dedupeKeepOrder(arr) {
   return [...new Set(arr)];
@@ -80,13 +90,22 @@ export const roomMixin = {
     const cover = room.cover || {};
     const urls = cover.url_list || [];
     info.cover = urls.length ? urls[0] : "";
-    info.user_count = room.user_count_str || "";
     info.like_count = room.like_count || 0;
     const stats = room.stats || {};
+    const view = room.room_view_stats || {};
+    // 精确人数优先：room_view_stats.display_value / stats.user_count_str 是未分档的真实值；
+    // 顶层 user_count_str 只是 "400+" / "1.2万" 这样的展示分档，只能作兜底
+    info.user_count_exact = [
+      view.display_value,
+      stats.user_count,
+      room.user_count,
+      stats.user_count_str,
+      view.display_short,
+    ].map(exactCount).find(n => n !== null) ?? null;
+    info.user_count = info.user_count_exact !== null
+      ? String(info.user_count_exact)
+      : String(room.user_count_str || stats.user_count_str || "");
     info.total_user = stats.total_user_str || "";
-    if (!info.user_count) {
-      info.user_count = String(stats.user_count_str || "");
-    }
     const owner = room.owner || {};
     info.owner_nickname = owner.nickname || "";
     info.owner_sec_uid = owner.sec_uid || "";
@@ -151,7 +170,10 @@ export const roomMixin = {
     info.live = info.status === 2;
     info.title = room.title || "";
     info.id_str = room.id_str || String(room.id || "");
-    info.user_count = String(room.user_count || "");
+    info.user_count_exact = exactCount(room.user_count) ?? exactCount(room.user_count_str);
+    info.user_count = info.user_count_exact !== null
+      ? String(info.user_count_exact)
+      : String(room.user_count || "");
     info.create_time = room.create_time;
     const cover = room.cover || {};
     if (typeof cover === "object" && cover !== null) {

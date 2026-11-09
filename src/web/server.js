@@ -11,7 +11,7 @@ import {
   PUBLIC_DIR, DEFAULT_RECORD_DIR, ALLOWED_STREAM_HOSTS, UA_DESKTOP,
 } from "../utils/constants.js";
 import { log, LOGS } from "../utils/logging.js";
-import { resolveInput } from "../utils/misc.js";
+import { resolveInput, parseCount } from "../utils/misc.js";
 import { parseAweme } from "../collectors/aweme.js";
 import { parseUser } from "../collectors/user.js";
 import { getBackend } from "../db/mongo.js";
@@ -40,6 +40,7 @@ const PROTECTED_GET = new Set([
   "/api/storage/status", "/api/notify/logs", "/api/fudai/history", "/api/fudai/current",
   "/api/admin/tables", "/api/admin/records", "/api/parse/video", "/api/parse/user",
   "/api/parse/cookie", "/api/parse/history", "/api/parse/history/item",
+  "/api/online/stats",
 ]);
 
 // 后台管理表定义（顺序与 Python TABLE_INFO 一致）
@@ -336,6 +337,77 @@ export function createApp(state, services) {
     const web_rid = s.web_rid || "";
     if (web_rid) await monitor._refresh_one(s);
     res.json(await streamerPayload(s));
+  }));
+
+  // ---------- 在线人数曲线 ----------
+  // 时间范围（秒），0 表示查询全部历史
+  const ONLINE_RANGES = { "1h": 3600, "6h": 21600, "24h": 86400, "7d": 604800, "30d": 2592000, all: 0 };
+
+  /** 采样点过多时按等长分片取平均，避免一次传输/绘制上万点 */
+  function downsamplePoints(points, maxPoints = 720) {
+    if (points.length <= maxPoints) return points;
+    const step = Math.ceil(points.length / maxPoints);
+    const out = [];
+    for (let i = 0; i < points.length; i += step) {
+      const chunk = points.slice(i, i + step);
+      const last = chunk[chunk.length - 1];
+      let sum = 0;
+      for (const p of chunk) sum += p.count;
+      out.push({
+        ts: last.ts,
+        count: Math.round(sum / chunk.length),
+        like_count: last.like_count || 0,
+        exact: chunk.every(p => p.exact === 1) ? 1 : 0,
+      });
+    }
+    return out;
+  }
+
+  app.get("/api/online/stats", authMw, ah(async (req, res) => {
+    const s = findStreamer(q1(req, "id"));
+    if (!s) return res.status(404).json({ error: "未找到该主播" });
+    const rangeKey = String(q1(req, "range", "24h"));
+    const span = ONLINE_RANGES[rangeKey] ?? ONLINE_RANGES["24h"];
+    const to = nowSec();
+    const from = span ? to - span : 0;
+    const rows = await getBackend().getOnlineSamples({
+      secUid: streamerId(s), webRid: String(s.web_rid || ""), since: from, until: to,
+    });
+    let peak = 0, low = Infinity, total = 0, approx = 0;
+    for (const p of rows) {
+      peak = Math.max(peak, p.count);
+      low = Math.min(low, p.count);
+      total += p.count;
+      if (p.exact !== 1) approx += 1;
+    }
+    const live = Boolean(s.room && s.room.live);
+    // 当前在线优先用抖音未分档的精确值（room_view_stats.display_value）
+    const exactCurrent = Number.isInteger(s.room?.user_count_exact) ? s.room.user_count_exact : null;
+    const firstRow = rows.length ? rows[0] : null;
+    const lastRow = rows.length ? rows[rows.length - 1] : null;
+    // 点赞总数：优先取实时房间数据，取不到时用最新采样点；区间新增按首尾采样点计算
+    const likeCount = Number(s.room?.like_count) || (lastRow ? Number(lastRow.like_count) || 0 : 0);
+    const likeDelta = firstRow && lastRow
+      ? Math.max(0, (Number(lastRow.like_count) || 0) - (Number(firstRow.like_count) || 0))
+      : 0;
+    res.json({
+      ok: true,
+      range: rangeKey,
+      from: span ? from : (rows.length ? rows[0].ts : to - 3600),
+      to,
+      points: downsamplePoints(rows),
+      live,
+      current: live ? (exactCurrent ?? parseCount(s.room.user_count)) : null,
+      current_exact: live && exactCurrent !== null,
+      peak,
+      min: rows.length ? low : 0,
+      avg: rows.length ? Number((total / rows.length).toFixed(1)) : 0,
+      samples: rows.length,
+      approx,
+      like_count: likeCount,
+      like_delta: likeDelta,
+      interval: Math.max(10, parseInt(state.config?.interval ?? 60, 10) || 60),
+    });
   }));
 
   app.get("/api/parse", authMw, ah(async (req, res) => {

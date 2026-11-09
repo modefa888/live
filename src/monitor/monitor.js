@@ -167,6 +167,18 @@ export class Monitor {
     Object.assign(room, d);
     room.updated_at = nowSec();
 
+    // ---- 在线人数采样：供详情页曲线图使用（按分钟分桶，重复刷新不会产生重复点）----
+    if (info.live && !info.error && d.user_count) {
+      getBackend().saveOnlineSample({
+        sec_uid,
+        web_rid,
+        user_count: d.user_count,
+        user_count_exact: d.user_count_exact,
+        like_count: d.like_count,
+        ts: nowSec(),
+      }).catch(() => {});
+    }
+
     // ---- 福袋检测（仅直播中 + 主播启用福袋监测）----
     if (info.live && Number(s.fudai_enabled ?? 1)) {
       if (!s.fudai || typeof s.fudai !== "object") s.fudai = { has_fudai: false };

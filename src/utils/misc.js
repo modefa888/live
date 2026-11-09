@@ -2,6 +2,23 @@
 import { UA_MOBILE } from "./constants.js";
 import { fetch as undiciFetch } from "undici";
 
+/**
+ * 把抖音返回的「在线人数」转成数值，供曲线图统计/绘制使用。
+ * 支持："1.2万" → 12000、"3,456" → 3456、"2.3w" → 23000、"1.5亿" → 150000000、纯数字。
+ * 无法识别时返回 null（调用方跳过该采样点）。
+ */
+export function parseCount(v) {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "number") return Number.isFinite(v) && v >= 0 ? Math.round(v) : null;
+  const s = String(v).trim().replace(/[,，\s]/g, "");
+  const m = s.match(/^(\d+(?:\.\d+)?)([万wW千kK亿]?)/);
+  if (!m) return null;
+  const unit = m[2].toLowerCase();
+  const factor = { "万": 1e4, w: 1e4, "千": 1e3, k: 1e3, "亿": 1e8 }[unit] || 1;
+  const n = parseFloat(m[1]) * factor;
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
+}
+
 // ---------- RoomInfo ----------
 export class RoomInfo {
   constructor() {
@@ -10,6 +27,7 @@ export class RoomInfo {
     this.title = "";
     this.cover = "";
     this.user_count = "";
+    this.user_count_exact = null;  // 未经分档的精确在线人数（number），取不到时为 null
     this.total_user = "";
     this.like_count = 0;
     this.streams = [];
@@ -33,6 +51,7 @@ export class RoomInfo {
       title: this.title,
       cover: this.cover,
       user_count: this.user_count,
+      user_count_exact: this.user_count_exact,
       total_user: this.total_user,
       like_count: this.like_count,
       streams: this.streams,
