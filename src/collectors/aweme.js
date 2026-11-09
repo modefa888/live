@@ -161,6 +161,7 @@ export async function parseAweme(text) {
       ? (item.video.cover.url_list)[0] || ""
       : "",
     duration: (item.video || {}).duration || 0, // 毫秒
+    music_title: (item.music || {}).title || "",
     music: (((item.music || {}).play_url || {}).url_list || [""])[0] || "",
   };
 

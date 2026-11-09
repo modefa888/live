@@ -1631,12 +1631,18 @@ async function doParseShare() {
 
 function renderParseResult(d) {
   const box = $('parseResult');
+  const st = d.stats || {};
+  const statsLine = (st.digg || st.comment || st.share)
+    ? '<div style="font-size:11px;color:var(--dim);margin-top:3px">❤ ' + esc(st.digg ?? '—') + ' · 💬 ' + esc(st.comment ?? '—') + ' · 🔗 ' + esc(st.share ?? '—') + '</div>'
+    : '';
   const head =
     '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px">'
     + (d.author && d.author.avatar ? '<img src="' + esc(d.author.avatar) + '" style="width:36px;height:36px;border-radius:50%;flex-shrink:0">' : '')
     + '<div style="flex:1;min-width:0">'
     + '<div style="font-size:13px;font-weight:600">' + esc((d.author && d.author.nickname) || '未知作者') + '</div>'
     + '<div style="font-size:11px;color:var(--dim);line-height:1.5;word-break:break-all">' + esc(d.desc || '(无文案)') + '</div>'
+    + statsLine
+    + (d.music_title && d.type === 'album' ? '<div style="font-size:11px;color:var(--dim);margin-top:3px">🎵 原声：' + esc(d.music_title) + '（音频直链抖音未提供，可在 App 内收听）</div>' : '')
     + '</div></div>';
 
   if (d.type === 'video') {
@@ -1668,7 +1674,8 @@ function renderParseResult(d) {
           + 'style="position:absolute;right:4px;bottom:4px;background:#0009;border-radius:6px;padding:2px 8px;font-size:11px;color:#fff;text-decoration:none">⬇</a>'
           + '</figure>').join('')
       + '</div>'
-      + '<div style="margin-top:10px;display:flex;gap:8px">'
+      + '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
+      + '<a class="btn sm primary" href="#" onclick="downloadAllParseImages();return false" style="text-decoration:none">⬇ 全部下载（' + d.count + ' 张）</a>'
       + '<a class="btn sm" href="#" onclick="copyParseImages();return false" style="text-decoration:none">📋 复制全部图片链接</a>'
       + '</div>';
   } else {
@@ -1688,6 +1695,26 @@ function copyParseImages() {
     document.execCommand('copy'); ta.remove();
     toast('已复制 ' + urls.length + ' 个链接', 'ok');
   }
+}
+
+// 图集全部下载：逐张触发代理下载（浏览器会请求"允许多个文件下载"授权）
+function downloadAllParseImages() {
+  const urls = window._parseImages || [];
+  if (!urls.length) return;
+  const token = AUTH_TOKEN || '';
+  let i = 0;
+  const tick = () => {
+    if (i >= urls.length) { toast('全部下载已触发：' + urls.length + ' 张', 'ok'); return; }
+    const a = document.createElement('a');
+    a.href = '/api/proxy?token=' + encodeURIComponent(token) + '&u=' + encodeURIComponent(urls[i]);
+    a.download = 'album_' + String(i + 1).padStart(2, '0') + '.jpg';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    i += 1;
+    setTimeout(tick, 400);
+  };
+  tick();
 }
 
 // 直连播放被 CDN 拒绝（签名直链绑定解析时出口 IP）时，自动切换本服务代理播放
