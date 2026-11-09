@@ -29,6 +29,7 @@ const PROTECTED_PATHS = new Set([
   "/api/import", "/api/pin", "/api/update", "/api/notify",
   "/api/backup/create", "/api/backup/restore", "/api/backup/delete",
   "/api/storage/test", "/api/storage/copy", "/api/parse/cookie",
+  "/api/parse/history/delete",
 ]);
 // 需要登录才能访问的 GET 接口；/api/square/* 与 /api/account/* 保持公开
 const PROTECTED_GET = new Set([
@@ -38,7 +39,7 @@ const PROTECTED_GET = new Set([
   "/api/notify", "/api/backup/list", "/api/fudai", "/api/fudai/right",
   "/api/storage/status", "/api/notify/logs", "/api/fudai/history", "/api/fudai/current",
   "/api/admin/tables", "/api/admin/records", "/api/parse/video", "/api/parse/user",
-  "/api/parse/cookie",
+  "/api/parse/cookie", "/api/parse/history", "/api/parse/history/item",
 ]);
 
 // 后台管理表定义（顺序与 Python TABLE_INFO 一致）
@@ -96,6 +97,35 @@ async function personalParseCookie(username) {
   } catch {
     return "";
   }
+}
+
+// 解析记录：按「账号 + 类型 + 作品/用户 key」生成稳定 id，重复解析只更新结果和时间
+function historyDocId(username, type, key) {
+  return crypto.createHash("md5").update(`${username}|${type}|${key}`).digest("hex");
+}
+
+async function recordParse(username, type, key, input, result) {
+  try {
+    let title = "", subtitle = "", cover = "";
+    if (type === "user") {
+      const u = result.user || {};
+      title = u.nickname || "未知用户";
+      subtitle = "抖音号 " + (u.unique_id || "—") + " · 粉丝 " + String(u.follower_count ?? "—");
+      cover = u.avatar || "";
+    } else {
+      title = String(result.desc || "").slice(0, 50) || ("作品 " + key);
+      subtitle = (result.type === "album" ? "图集" : "视频")
+        + " · " + ((result.author && result.author.nickname) || "未知作者");
+      cover = result.cover || (result.images || [])[0] || "";
+    }
+    await getBackend().saveParseHistory(historyDocId(username, type, key), {
+      username, type, key: String(key),
+      title, subtitle, cover,
+      input: String(input || "").slice(0, 500),
+      result,
+      created_at: nowSec(),
+    });
+  } catch {} // 记录写入失败不影响解析结果
 }
 
 function maskAuth(req) {
@@ -319,18 +349,29 @@ export function createApp(state, services) {
     const [, user] = await checkAuth(req, res);
     if (!user) return;
     const personal = await personalParseCookie(user.username);
-    res.json(await parseAweme(text, { cookie: personal || String(state.config.cookie || "") }));
+    const r = await parseAweme(text, { cookie: personal || String(state.config.cookie || "") });
+    if (r && r.ok) {
+      await recordParse(user.username, "video", String(r.id || text), text, r);
+    }
+    res.json(r);
   }));
 
   app.get("/api/parse/user", authMw, ah(async (req, res) => {
     // 抖音用户主页解析：资料 + 作品列表（cursor 翻页）
+    const text = q1(req, "text");
+    const cursor = q1(req, "cursor") || "0";
     const [, user] = await checkAuth(req, res);
     if (!user) return;
     const personal = await personalParseCookie(user.username);
-    res.json(await parseUser(q1(req, "text"), {
+    const r = await parseUser(text, {
       cookie: personal || String(state.config.cookie || ""),
-      cursor: q1(req, "cursor") || "0",
-    }));
+      cursor,
+    });
+    // 翻页请求不重复写记录
+    if (r && r.ok && cursor === "0") {
+      await recordParse(user.username, "user", String(r.sec_uid || text), text, r);
+    }
+    res.json(r);
   }));
 
   // ---------- 个人解析 Cookie：按登录账号隔离，不进全局配置 / 后台表 / 日志 ----------
@@ -368,6 +409,43 @@ export function createApp(state, services) {
       return res.json({ ok: true, has: true, length: raw.length, msg: "已保存个人 Cookie" });
     } catch (e) {
       return res.status(500).json({ ok: false, msg: `保存失败: ${e && e.message ? e.message : e}` });
+    }
+  }));
+
+  // ---------- 解析记录：按登录账号隔离，作品 / 主页两类 ----------
+  app.get("/api/parse/history", authMw, ah(async (req, res) => {
+    const [, user] = await checkAuth(req, res);
+    if (!user) return;
+    const rawType = q1(req, "type");
+    const type = ["video", "user"].includes(rawType) ? rawType : "";
+    try {
+      res.json({ ok: true, records: await getBackend().listParseHistory(user.username, type) });
+    } catch (e) {
+      res.json({ ok: false, msg: String(e && e.message ? e.message : e), records: [] });
+    }
+  }));
+
+  app.get("/api/parse/history/item", authMw, ah(async (req, res) => {
+    const [, user] = await checkAuth(req, res);
+    if (!user) return;
+    try {
+      const record = await getBackend().getParseHistory(user.username, q1(req, "id"));
+      res.json(record ? { ok: true, record } : { ok: false, msg: "记录不存在或无权访问" });
+    } catch (e) {
+      res.json({ ok: false, msg: String(e && e.message ? e.message : e) });
+    }
+  }));
+
+  app.post("/api/parse/history/delete", authMw, ah(async (req, res) => {
+    const [, user] = await checkAuth(req, res);
+    if (!user) return;
+    const data = req.body || {};
+    const type = ["video", "user"].includes(data.type) ? data.type : "";
+    try {
+      await getBackend().removeParseHistory(user.username, String(data.id || ""), type);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ ok: false, msg: String(e && e.message ? e.message : e) });
     }
   }));
 

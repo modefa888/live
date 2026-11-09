@@ -314,7 +314,7 @@
 <!-- 抖音作品解析（视频/图集/动图） -->
 <div class="modal-mask" id="parseMask">
   <div class="modal">
-    <div class="modal-head"><h3>🎬 作品解析</h3><button class="btn sm ghost" id="parseCookieBtn" onclick="openCookiePanel()" title="保存仅本人使用的抖音 Cookie">🔑 Cookie</button><button class="btn sm ghost" onclick="closeModal('parseMask')">✕</button></div>
+    <div class="modal-head"><h3>🎬 作品解析</h3><button class="btn sm ghost" onclick="openHistoryPanel('video')" title="作品解析记录">📜 记录</button><button class="btn sm ghost" id="parseCookieBtn" onclick="openCookiePanel()" title="保存仅本人使用的抖音 Cookie">🔑 Cookie</button><button class="btn sm ghost" onclick="closeModal('parseMask')">✕</button></div>
     <div class="modal-body">
       <label>粘贴 分享文案 / 短链 / 视频(图集)链接 / 作品ID（支持 视频 · 图集 · 图片 · 动图 · 实况图）</label>
       <textarea id="parseInput" rows="3" placeholder="例如: 7.43 pKc:/ 复制打开抖音看看... https://v.douyin.com/xxxxxxx/"
@@ -332,7 +332,7 @@
 <!-- 抖音用户主页解析 -->
 <div class="modal-mask" id="userMask">
   <div class="modal">
-    <div class="modal-head"><h3>👤 用户主页解析</h3><button class="btn sm ghost" id="userCookieBtn" onclick="openCookiePanel()" title="保存仅本人使用的抖音 Cookie">🔑 Cookie</button><button class="btn sm ghost" onclick="closeModal('userMask')">✕</button></div>
+    <div class="modal-head"><h3>👤 用户主页解析</h3><button class="btn sm ghost" onclick="openHistoryPanel('user')" title="主页解析记录">📜 记录</button><button class="btn sm ghost" id="userCookieBtn" onclick="openCookiePanel()" title="保存仅本人使用的抖音 Cookie">🔑 Cookie</button><button class="btn sm ghost" onclick="closeModal('userMask')">✕</button></div>
     <div class="modal-body">
       <label>粘贴 用户主页分享文案 / 短链 / 主页链接 / sec_uid</label>
       <textarea id="userInput" rows="2" placeholder="例如: https://v.douyin.com/xxxxx/ 或 https://www.douyin.com/user/MS4wLjAB.../"
@@ -373,6 +373,23 @@
         <button class="btn" onclick="clearParseCookie()">🗑 清除</button>
         <button class="btn" onclick="closeModal('cookieMask')">关闭</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 解析记录（作品 / 主页，按登录账号隔离） -->
+<div class="modal-mask" id="parseHistoryMask" style="z-index:70">
+  <div class="modal">
+    <div class="modal-head"><h3>📜 解析记录</h3><button class="btn sm ghost" onclick="closeModal('parseHistoryMask')">✕</button></div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn sm" id="histTabVideo" style="border:1px solid transparent" onclick="switchHistoryTab('video')">🎬 作品解析记录</button>
+        <button class="btn sm" id="histTabUser" style="border:1px solid transparent" onclick="switchHistoryTab('user')">👤 主页解析记录</button>
+        <span style="flex:1"></span>
+        <button class="btn sm ghost" onclick="clearParseHistory()">🗑 清空本类</button>
+      </div>
+      <div id="historyList" style="height:360px;max-height:60vh;overflow-y:auto;scrollbar-gutter:stable;overscroll-behavior:contain"></div>
+      <div class="hint">💡 仅显示当前登录账号自己的记录，每类最多 50 条；点「查看」可载入当时的解析结果（CDN 直链可能已过期，重新点解析按钮可刷新）。</div>
     </div>
   </div>
 </div>
@@ -1872,6 +1889,102 @@ function downloadAllParseVideos() {
   batchDownloadParsed(items, '动态视频下载已触发：');
 }
 
+// ================= 解析记录（作品 / 主页，按登录账号隔离） =================
+function openHistoryPanel(type) {
+  window._historyType = type === 'user' ? 'user' : 'video';
+  $('parseHistoryMask').classList.add('show');
+  loadParseHistory();
+}
+
+function switchHistoryTab(type) {
+  window._historyType = type === 'user' ? 'user' : 'video';
+  loadParseHistory();
+}
+
+async function loadParseHistory() {
+  const type = window._historyType || 'video';
+  const tv = $('histTabVideo'), tu = $('histTabUser'), box = $('historyList');
+  if (tv) tv.className = 'btn sm' + (type === 'video' ? ' primary' : '');
+  if (tu) tu.className = 'btn sm' + (type === 'user' ? ' primary' : '');
+  if (!box) return;
+  // 容器固定高度，读取中 / 空状态始终居中，切换 Tab 时弹窗不会忽高忽低
+  const centerStyle = 'height:100%;display:flex;align-items:center;justify-content:center;text-align:center';
+  box.innerHTML = '<div style="' + centerStyle + ';color:var(--dim);font-size:12px">读取中…</div>';
+  let r;
+  try {
+    r = await api('/api/parse/history?type=' + type);
+  } catch (e) {
+    box.innerHTML = '<div class="hint" style="' + centerStyle + ';color:#f87171">✗ 请求失败: ' + esc(e.message || e) + '</div>';
+    return;
+  }
+  const list = (r && r.records) || [];
+  if (!list.length) {
+    box.innerHTML = '<div class="hint" style="' + centerStyle + '">暂无'
+      + (type === 'user' ? '主页' : '作品') + '解析记录</div>';
+    return;
+  }
+  box.innerHTML = list.map(rec =>
+    '<div style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-bottom:1px solid var(--line)">'
+    + (rec.cover
+        ? '<img src="' + esc(rec.cover) + '" loading="lazy" style="width:40px;height:40px;object-fit:cover;border-radius:8px;flex-shrink:0">'
+        : '<div style="width:40px;height:40px;border-radius:8px;background:var(--panel2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px">'
+          + (type === 'user' ? '👤' : '🎬') + '</div>')
+    + '<div style="flex:1;min-width:0">'
+    + '<div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+    + esc(rec.title || '(无标题)') + '</div>'
+    + '<div style="font-size:11px;color:var(--dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+    + esc(rec.subtitle || '') + ' · ' + (rec.created_at ? fmtTime(rec.created_at) : '—') + '</div>'
+    + '</div>'
+    + '<button class="btn sm" onclick="viewParseHistory(\'' + esc(rec.id) + '\')">查看</button>'
+    + '<button class="btn sm ghost" title="删除" onclick="deleteParseHistory(\'' + esc(rec.id) + '\')">✕</button>'
+    + '</div>').join('');
+}
+
+async function viewParseHistory(id) {
+  let r;
+  try {
+    r = await api('/api/parse/history/item?id=' + encodeURIComponent(id));
+  } catch (e) {
+    toast('读取记录失败: ' + (e.message || e), 'warn');
+    return;
+  }
+  if (!r.ok || !r.record || !r.record.result) { toast(r.msg || '记录不可用', 'warn'); return; }
+  const rec = r.record;
+  closeModal('parseHistoryMask');
+  if (rec.type === 'user') {
+    $('userInput').value = rec.input || rec.key || '';
+    openUserPanel();
+    renderUserResult(rec.result);
+  } else {
+    $('parseInput').value = rec.input || '';
+    openParsePanel();
+    renderParseResult(rec.result);
+  }
+  toast('已载入历史解析结果（可点解析按钮刷新）', 'ok');
+}
+
+async function deleteParseHistory(id) {
+  const r = await api('/api/parse/history/delete', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}),
+  });
+  if (!r.ok) { toast(r.msg || '删除失败', 'warn'); return; }
+  loadParseHistory();
+  toast('已删除记录', 'ok');
+}
+
+function clearParseHistory() {
+  const type = window._historyType || 'video';
+  const label = type === 'user' ? '主页' : '作品';
+  showConfirm('清空解析记录', '确定清空当前账号的全部' + label + '解析记录吗？', async function() {
+    const r = await api('/api/parse/history/delete', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({type}),
+    });
+    if (!r.ok) { toast(r.msg || '清空失败', 'warn'); return; }
+    loadParseHistory();
+    toast('已清空' + label + '解析记录', 'ok');
+  });
+}
+
 // ================= 个人解析 Cookie（按登录账号隔离） =================
 async function loadParseCookieStatus() {
   const status = $('cookieStatus');
@@ -2100,7 +2213,7 @@ function parseVideoFallback(v) {
   }
 }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePlayer(); ['addMask','detailMask','confirmMask','historyMask','squareMask','parseMask','userMask','cookieMask'].forEach(closeModal); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePlayer(); ['addMask','detailMask','confirmMask','historyMask','squareMask','parseMask','userMask','cookieMask','parseHistoryMask'].forEach(closeModal); } });
 document.querySelectorAll('.modal-mask').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); }));
 
 // ================= 直播广场 =================

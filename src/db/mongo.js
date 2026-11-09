@@ -66,6 +66,8 @@ export class MongoHistoryDB {
       db.collection("sessions").createIndex({ created_at: 1 }, { expireAfterSeconds: 30 * 86400 }),
       // 个人解析 Cookie：按登录账号隔离（不进 config 集合、不出现在后台表）
       db.collection("parse_cookies").createIndex({ username: 1 }, { unique: true }),
+      // 解析记录：作品 / 用户主页，按账号隔离、按时间倒序
+      db.collection("parse_history").createIndex({ username: 1, type: 1, created_at: -1 }),
     ]);
   }
 
@@ -594,6 +596,59 @@ export class MongoHistoryDB {
   async deleteParseCookie(username) {
     const db = await this._ensure();
     await db.collection("parse_cookies").deleteOne({ username: String(username) });
+  }
+
+  // ================= 解析记录（作品 / 主页，按登录账号隔离） =================
+
+  /** 同一账号 + 类型 + 作品/用户 key 只保留一条，写入后超出 50 条的旧记录自动清理 */
+  async saveParseHistory(id, doc) {
+    const db = await this._ensure();
+    await db.collection("parse_history").updateOne({ _id: id }, { $set: doc }, { upsert: true });
+    const stale = await db.collection("parse_history")
+      .find({ username: doc.username, type: doc.type }, { projection: { _id: 1 } })
+      .sort({ created_at: -1 }).skip(50).toArray();
+    if (stale.length) {
+      await db.collection("parse_history").deleteMany({ _id: { $in: stale.map((x) => x._id) } });
+    }
+  }
+
+  /** 列表不返回完整解析结果，避免一次拉回大量数据 */
+  async listParseHistory(username, type = "") {
+    const db = await this._ensure();
+    const filter = type ? { username, type } : { username };
+    const rows = await db.collection("parse_history")
+      .find(filter, { projection: { result: 0 } })
+      .sort({ created_at: -1 }).limit(50).toArray();
+    return rows.map((r) => ({
+      id: String(r._id), type: r.type, key: r.key || "",
+      title: r.title || "", subtitle: r.subtitle || "", cover: r.cover || "",
+      input: r.input || "", created_at: Number(r.created_at) || 0,
+    }));
+  }
+
+  /** 读取单条完整结果，强制校验归属账号 */
+  async getParseHistory(username, id) {
+    const db = await this._ensure();
+    const row = await db.collection("parse_history").findOne({ _id: id, username });
+    if (!row) return null;
+    return {
+      id: String(row._id), type: row.type, key: row.key || "",
+      title: row.title || "", subtitle: row.subtitle || "", cover: row.cover || "",
+      input: row.input || "", created_at: Number(row.created_at) || 0,
+      result: row.result || null,
+    };
+  }
+
+  /** 删除单条；未指定 id 时按类型清空该账号记录 */
+  async removeParseHistory(username, id = "", type = "") {
+    const db = await this._ensure();
+    if (id) {
+      await db.collection("parse_history").deleteOne({ _id: id, username });
+    } else if (type) {
+      await db.collection("parse_history").deleteMany({ username, type });
+    } else {
+      await db.collection("parse_history").deleteMany({ username });
+    }
   }
 
   // ================= 管理后台计数 =================
