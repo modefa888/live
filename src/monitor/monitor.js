@@ -17,10 +17,22 @@ export class Monitor {
     this.last_refresh = 0;
     this.refreshing = false;
     this._runPromise = null;
+    this.current_interval = 0;   // 本轮实际生效的间隔（供状态接口展示）
   }
 
   stop() {
     this.stop_flag = true;
+  }
+
+  /** 下一轮间隔：关闭随机时用固定值；开启时在 [min,max] 内随机取整（含端点） */
+  nextInterval() {
+    const cfg = this.config || {};
+    const base = Math.max(10, parseInt(cfg.interval ?? 60, 10) || 60);
+    if (!cfg.interval_random) return base;
+    let lo = Math.max(10, parseInt(cfg.interval_min ?? base, 10) || base);
+    let hi = Math.max(10, parseInt(cfg.interval_max ?? base, 10) || base);
+    if (lo > hi) [lo, hi] = [hi, lo];
+    return Math.min(3600, Math.max(10, lo + Math.floor(Math.random() * (hi - lo + 1))));
   }
 
   async run() {
@@ -31,7 +43,8 @@ export class Monitor {
       } catch (e) {
         log("error", `自动刷新异常: ${e && e.message ? e.message : e}`);
       }
-      const interval = Math.max(10, parseInt(this.config.interval ?? 60, 10) || 60);
+      const interval = this.nextInterval();
+      this.current_interval = interval;
       const wait = Math.max(5, interval - (Date.now() / 1000 - t0));
       await this._waitOrStop(wait);
     }

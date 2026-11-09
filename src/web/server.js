@@ -323,11 +323,17 @@ export function createApp(state, services) {
         if (ids.has(streamerId(s))) streamers.push(await streamerPayload(s));
       }
     }
+    const curIv = Number(monitor.current_interval) || Math.max(10, parseInt(state.config?.interval ?? 60, 10) || 60);
     res.json({
       streamers,
       has_ffmpeg: recorder.has_ffmpeg,
       last_refresh: monitor.last_refresh,
       recording_count: recorder.list().length,
+      // 随机模式下每轮间隔不同，下发给前端同步倒计时
+      refresh_interval: curIv,
+      interval_random: Boolean(state.config?.interval_random),
+      interval_min: Number(state.config?.interval_min) || 30,
+      interval_max: Number(state.config?.interval_max) || 90,
     });
   }));
 
@@ -1197,12 +1203,22 @@ export function createApp(state, services) {
     }
 
     // ---------- 基础字段 ----------
+    const clampInterval = (v, def) => Math.min(3600, Math.max(10, parseInt(v ?? def, 10) || def));
     if ("interval" in data) {
       try {
-        cfg.interval = Math.min(3600, Math.max(10, parseInt(data.interval ?? cfg.interval ?? 60, 10) || 60));
+        cfg.interval = clampInterval(data.interval, cfg.interval ?? 60);
       } catch {
         cfg.interval = 60;
       }
+    }
+    if ("interval_random" in data) cfg.interval_random = Boolean(data.interval_random);
+    if ("interval_min" in data) cfg.interval_min = clampInterval(data.interval_min, cfg.interval_min ?? 30);
+    if ("interval_max" in data) cfg.interval_max = clampInterval(data.interval_max, cfg.interval_max ?? 90);
+    // 前后填反也保证区间有效
+    if (Number(cfg.interval_min) > Number(cfg.interval_max)) {
+      const t = cfg.interval_min;
+      cfg.interval_min = cfg.interval_max;
+      cfg.interval_max = t;
     }
     _put("cookie");
     _put("record_dir", undefined, DEFAULT_RECORD_DIR);

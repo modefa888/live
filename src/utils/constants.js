@@ -62,6 +62,10 @@ export const ALLOWED_STREAM_HOSTS = [
 // ---------- 默认配置 ----------
 export const DEFAULT_CONFIG = {
   interval: 60,
+  // 随机监控间隔：开启后每轮在 [interval_min, interval_max] 内随机取下一次间隔（含端点）
+  interval_random: false,
+  interval_min: 30,
+  interval_max: 90,
   cookie: "",
   notify_sound: true,
   notify_browser: true,

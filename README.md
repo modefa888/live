@@ -35,6 +35,12 @@ node index.js --dir /path/to/recordings   # 覆盖录制目录
 
 首次打开 `http://<IP>:8010/` 会要求创建管理员账号（账号存于 MongoDB `accounts` 集合，密码 sha256+salt，与 Python 版算法一致）。
 
+## 监控间隔（固定 / 随机）
+
+设置 → 基础 →「自动刷新间隔」为固定间隔（10~3600 秒）。勾选「🎲 启用随机间隔」并填写最小/最大后，监控每轮刷新结束会在 `[最小, 最大]` 内（含端点）随机生成下一次等待秒数，用于模拟人工节奏、降低风控概率；关闭时沿用固定间隔。最小值大于最大值时自动交换，所有值统一限制在 10~3600 秒。
+
+主页状态栏倒计时会跟随后端当前生效的间隔；`/api/streamers` 下发 `refresh_interval` / `interval_random` / `interval_min` / `interval_max`。Vercel Serverless 由 Cron 每天触发一次，随机间隔不适用。
+
 ## MongoDB
 
 连接串（可用环境变量覆盖）：

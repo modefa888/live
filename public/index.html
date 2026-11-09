@@ -1281,6 +1281,15 @@ async function loadData() {
   window.HAS_FFMPEG = d.has_ffmpeg;
   window.LAST_REFRESH = d.last_refresh;
   window.RECORDING_COUNT = d.recording_count || 0;
+  // 随机模式下后端每轮间隔不同，倒计时跟随当前生效值
+  if (d.refresh_interval && d.refresh_interval !== window.REFRESH_INTERVAL) {
+    window.REFRESH_INTERVAL = d.refresh_interval;
+    restartAutoRefresh();
+  }
+  const ivTextEl = $('intervalText');
+  if (ivTextEl) ivTextEl.title = d.interval_random
+    ? `随机间隔 ${d.interval_min}~${d.interval_max}s`
+    : '固定间隔';
   // 已移除角标显示
   // 仅当主播数据实际变化时才重绘 DOM，减少无意义闪烁
   if (changed) {
@@ -1301,7 +1310,7 @@ function updateCountdown() {
 // 每秒递减，倒计时显示固定两位数(1秒显示01)；循环倒计时到 01 时自动请求直播列表接口并重置
 function restartAutoRefresh() {
   if (pollTimer) clearInterval(pollTimer);
-  const iv = Math.max(10, CONFIG.interval || 60);
+  const iv = Math.max(10, window.REFRESH_INTERVAL || CONFIG.interval || 60);
   countdown = iv;
   updateCountdown();
   pollTimer = setInterval(() => {

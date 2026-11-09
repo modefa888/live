@@ -436,6 +436,12 @@
       <div class="tabpage active" id="tabSetBase">
         <label>自动刷新间隔(秒, 10~3600)</label>
         <input type="number" id="cfgInterval" min="10" max="3600">
+        <div class="switch"><input type="checkbox" id="cfgIntervalRandom" onchange="syncIntervalInputs()"> 🎲 启用随机间隔（每轮在下方范围内随机生成下一次间隔）</div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <div style="flex:1;min-width:0"><label style="margin-top:0">最小间隔(秒)</label><input type="number" id="cfgIntervalMin" min="10" max="3600"></div>
+          <div style="flex:1;min-width:0"><label style="margin-top:0">最大间隔(秒)</label><input type="number" id="cfgIntervalMax" min="10" max="3600"></div>
+        </div>
+        <div class="hint" id="cfgIntervalHint" style="margin-top:6px"></div>
         <label>自定义 Cookie(可选, 被风控时填写)</label>
         <textarea id="cfgCookie" rows="3" placeholder="ttwid=...; __ac_signature=..."></textarea>
         <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
@@ -1534,10 +1540,25 @@ function tab(el, id) {
 }
 
 // ================= 设置（Tab 分栏，各栏独立保存） =================
+// 随机间隔开关：启用时停用固定间隔输入，反之停用范围输入
+function syncIntervalInputs() {
+  const on = !!$('cfgIntervalRandom')?.checked;
+  ['cfgIntervalMin', 'cfgIntervalMax'].forEach(id => { const el = $(id); if (el) el.disabled = !on; });
+  const fixed = $('cfgInterval'); if (fixed) fixed.disabled = on;
+  const hint = $('cfgIntervalHint');
+  if (hint) hint.textContent = on
+    ? '每轮刷新结束后随机生成下一次间隔（含端点，10~3600 秒），当前固定间隔已停用。'
+    : '当前使用固定间隔；勾选上方开关可启用随机间隔。';
+}
+
 async function openSettings() {
   const d = await api('/api/config');
   CONFIG = d.config || {};
   $('cfgInterval').value = CONFIG.interval ?? 60;
+  $('cfgIntervalRandom').checked = !!CONFIG.interval_random;
+  $('cfgIntervalMin').value = CONFIG.interval_min ?? 30;
+  $('cfgIntervalMax').value = CONFIG.interval_max ?? 90;
+  syncIntervalInputs();
   $('cfgCookie').value = CONFIG.cookie || '';
   $('cfgRecordDir').value = CONFIG.record_dir || 'recordings';
   $('cfgSound').checked = !!CONFIG.notify_sound;
@@ -1618,6 +1639,9 @@ function notifyEventsToStr(obj) {
 async function saveSettingsBase() {
   const body = {
     interval: parseInt($('cfgInterval').value) || 60,
+    interval_random: $('cfgIntervalRandom').checked,
+    interval_min: parseInt($('cfgIntervalMin').value) || 30,
+    interval_max: parseInt($('cfgIntervalMax').value) || 90,
     cookie: $('cfgCookie').value.trim(),
     record_dir: $('cfgRecordDir').value.trim() || 'recordings',
     notify_sound: $('cfgSound').checked,
@@ -1631,7 +1655,10 @@ async function saveSettingsBase() {
   };
   const r = await api('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
   if (r.config) CONFIG = Object.assign(CONFIG, r.config);
-  toast('基础设置已保存', '刷新间隔 ' + (r.config ? r.config.interval : body.interval) + 's', 'ok');
+  const ivText = r.config?.interval_random
+    ? `随机间隔 ${r.config.interval_min}~${r.config.interval_max}s`
+    : `刷新间隔 ${r.config ? r.config.interval : body.interval}s`;
+  toast('基础设置已保存', ivText, 'ok');
 }
 
 // 福袋参数保存
