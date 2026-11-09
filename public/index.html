@@ -469,6 +469,10 @@
     <div class="modal-head"><h3>🔑 个人 Cookie</h3><button class="btn sm ghost" onclick="closeModal('cookieMask')">✕</button></div>
     <div class="modal-body">
       <label>抖音网页版 Cookie（DevTools → Network → 任意 douyin.com 请求 → Request Headers → cookie，整行复制）</label>
+      <div class="hint" style="margin:-2px 0 8px">
+        <a href="https://www.douyin.com/" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:none;font-weight:600">🔗 打开抖音网页版登录</a>
+        <span> · 登录后按 F12 → Network → 任意 douyin.com 请求 → Request Headers → 复制整行 cookie 粘贴到下方</span>
+      </div>
       <textarea id="cookieInput" rows="5" placeholder="ttwid=...; sessionid=...; ...（已保存时留空不动，粘贴新值即覆盖）"
         style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--txt);resize:vertical;font-size:12px;outline:none"></textarea>
       <div id="cookieStatus" class="hint" style="margin-top:8px">读取中…</div>
@@ -2428,8 +2432,18 @@ function openCookiePanel() {
   setTimeout(() => $('cookieInput').focus(), 50);
 }
 
+// 兼容从 DevTools 复制的 "cookie: xxx"、换行、首尾引号
+function normalizeCookieText(v) {
+  return String(v || '')
+    .replace(/^cookie\s*:\s*/i, '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^["']|["']$/g, '')
+    .trim();
+}
+
 async function saveParseCookie() {
-  const v = $('cookieInput').value.trim();
+  const v = normalizeCookieText($('cookieInput').value);
   if (!v) { toast('请先粘贴 Cookie，或点「清除」删除已保存的 Cookie'); return; }
   const r = await api('/api/parse/cookie', {
     method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({cookie: v}),

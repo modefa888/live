@@ -468,7 +468,13 @@ export function createApp(state, services) {
   app.post("/api/parse/cookie", authMw, ah(async (req, res) => {
     const [, user] = await checkAuth(req, res);
     if (!user) return;
-    const raw = String((req.body || {}).cookie || "").replace(/[\r\n]+/g, " ").trim();
+    // 兼容从 DevTools 直接复制的 "cookie: xxx" / 带换行 / 带引号的整行内容
+    const raw = String((req.body || {}).cookie || "")
+      .replace(/^cookie\s*:\s*/i, "")
+      .replace(/[\r\n]+/g, " ")
+      .replace(/\s+/g, " ")
+      .replace(/^["']|["']$/g, "")
+      .trim();
     if (raw.length > 8192) {
       return res.status(400).json({ ok: false, msg: "Cookie 过长（上限 8192 字符）" });
     }
