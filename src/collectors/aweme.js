@@ -80,8 +80,9 @@ function collectVideoUrls(v) {
   return out;
 }
 
-// ---------- 抖音 web 详情接口：分享页不下发实况图视频，只有该接口含 images[i].video ----------
-const DETAIL_API = "https://www.douyin.com/aweme/v1/web/aweme/detail/";
+// ---------- 抖音 web 接口（webSign）：作品详情 / 用户资料 / 用户作品列表共用 ----------
+const WEB_API_HOST = "https://www.douyin.com";
+const DETAIL_PATH = "/aweme/v1/web/aweme/detail/";
 const WEB_SIGN_SALT = "A96D855A08C0A9707F8BEF0D9A527E4E";
 let _webSession = null; // { at, ttwid, uifid }
 
@@ -108,8 +109,9 @@ async function ensureWebSession() {
   return _webSession;
 }
 
-// 带 x-secsdk-web-signature（md5 webSign）请求详情；匿名 ttwid 会话即可，配置 Cookie 可提升成功率
-async function fetchAwemeDetail(id, userCookie = "") {
+// 带 x-secsdk-web-signature（md5 webSign）请求 web 接口；匿名 ttwid 会话即可，配置 Cookie 可提升成功率
+// path 形如 /aweme/v1/web/aweme/detail/；返回解析后的 JSON，失败返回 null
+export async function fetchDouyinWebApi(path, params = {}, userCookie = "", referer = "https://www.douyin.com/") {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const s = await ensureWebSession();
@@ -117,9 +119,7 @@ async function fetchAwemeDetail(id, userCookie = "") {
       const userCk = parseCookieHeader(userCookie);
       const uifid = userCk.UIFID_TEMP || userCk.UIFID || userCk.uifid || s.uifid;
       const ts = String(Math.floor(Date.now() / 1000));
-      const query = new URLSearchParams({
-        aweme_id: id, aid: "6383", device_platform: "webapp", uifid, timestamp: ts,
-      }).toString();
+      const query = new URLSearchParams({ ...params, uifid, timestamp: ts }).toString();
       const sig = createHash("md5")
         .update(`${uifid}_${ts}_${WEB_SIGN_SALT}_${query}`)
         .digest("hex");
@@ -127,26 +127,41 @@ async function fetchAwemeDetail(id, userCookie = "") {
       const headers = {
         "User-Agent": UA_DESKTOP,
         "Accept": "application/json",
-        "Referer": "https://www.douyin.com/",
+        "Referer": referer,
         "Cookie": Object.entries(ck).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; "),
         uifid,
         "x-secsdk-web-signature": sig,
         "x-secsdk-web-expire": ts,
       };
-      const res = await undiciFetch(`${DETAIL_API}?${query}&x-secsdk-web-signature=${sig}`, {
+      const res = await undiciFetch(`${WEB_API_HOST}${path}?${query}&x-secsdk-web-signature=${sig}`, {
         headers,
         dispatcher: getDispatcher(),
         signal: AbortSignal.timeout(15000),
         redirect: "follow",
       });
-      const data = await res.json();
-      if (res.ok && data && data.status_code === 0 && data.aweme_detail) return data.aweme_detail;
-      _webSession = null; // 会话/签名失效，换一个会话重试
+      const text = await res.text();
+      if (!text.trim()) return null; // 风控时返回空体（如作品列表接口缺 a_bogus），重试无意义
+      const data = JSON.parse(text);
+      if (!res.ok || (data.status_code !== undefined && data.status_code !== 0)) {
+        _webSession = null; // 会话/签名失效，换一个会话重试
+        continue;
+      }
+      return data;
     } catch {
       _webSession = null;
     }
   }
   return null;
+}
+
+// 分享页不下发实况图视频，只有详情接口含 images[i].video
+async function fetchAwemeDetail(id, userCookie = "") {
+  const data = await fetchDouyinWebApi(
+    DETAIL_PATH,
+    { aweme_id: id, aid: "6383", device_platform: "webapp" },
+    userCookie,
+  );
+  return (data && data.aweme_detail) || null;
 }
 
 /**
@@ -256,6 +271,7 @@ export async function parseAweme(text, options = {}) {
     author: {
       nickname: author.nickname || "",
       avatar: ((author.avatar_thumb || {}).url_list || [""])[0] || "",
+      sec_uid: author.sec_uid || "",
     },
     stats: {
       digg: (item.statistics || {}).digg_count ?? "",

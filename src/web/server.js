@@ -13,6 +13,7 @@ import {
 import { log, LOGS } from "../utils/logging.js";
 import { resolveInput } from "../utils/misc.js";
 import { parseAweme } from "../collectors/aweme.js";
+import { parseUser } from "../collectors/user.js";
 import { getBackend } from "../db/mongo.js";
 import { cmdBackup, cmdList, cmdRestore, cmdDelete } from "../utils/backup.js";
 import { getDispatcher, setGlobalProxy } from "../utils/httputil.js";
@@ -36,7 +37,7 @@ const PROTECTED_GET = new Set([
   "/api/logs", "/api/search", "/api/proxy", "/api/open_dir", "/api/play", "/api/pin",
   "/api/notify", "/api/backup/list", "/api/fudai", "/api/fudai/right",
   "/api/storage/status", "/api/notify/logs", "/api/fudai/history", "/api/fudai/current",
-  "/api/admin/tables", "/api/admin/records", "/api/parse/video",
+  "/api/admin/tables", "/api/admin/records", "/api/parse/video", "/api/parse/user",
 ]);
 
 // 后台管理表定义（顺序与 Python TABLE_INFO 一致）
@@ -305,6 +306,14 @@ export function createApp(state, services) {
     // 抖音作品解析：视频（无水印直链）/ 图集（图片 + 动图 + 实况图动态视频）
     const text = q1(req, "text");
     res.json(await parseAweme(text, { cookie: String(state.config.cookie || "") }));
+  }));
+
+  app.get("/api/parse/user", authMw, ah(async (req, res) => {
+    // 抖音用户主页解析：资料 + 作品列表（cursor 翻页）
+    res.json(await parseUser(q1(req, "text"), {
+      cookie: String(state.config.cookie || ""),
+      cursor: q1(req, "cursor") || "0",
+    }));
   }));
 
   app.get("/api/refresh", authMw, ah(async (req, res) => {
