@@ -10,11 +10,12 @@ import { fetchDouyinWebApi } from "./aweme.js";
 const SHARE_USER = "https://www.iesdouyin.com/share/user/";
 
 // 短链展开：v.douyin.com 用户分享链接 → www.douyin.com/user/{sec_uid}
-async function expandShortLink(url) {
+async function expandShortLink(url, userCookie = "") {
   try {
     const ttwid = await fetchTtwid();
     const headers = { "User-Agent": UA_MOBILE };
-    if (ttwid) headers.Cookie = `ttwid=${ttwid}`;
+    const ck = [ttwid ? `ttwid=${ttwid}` : "", userCookie].filter(Boolean).join("; ");
+    if (ck) headers.Cookie = ck;
     const res = await undiciFetch(url, {
       headers,
       redirect: "follow",
@@ -63,9 +64,10 @@ function normalizeUser(u) {
   };
 }
 
-// 回退：用户分享主页 SSR（带 __ac_nonce 会话可绕过 jsvmprt 风控）
-async function fetchUserFromShare(secUid) {
-  for (const cookie of [DEFAULT_AC_COOKIES, ""]) {
+// 回退：用户分享主页 SSR（优先个人 Cookie，再用 __ac_nonce 会话绕过 jsvmprt 风控）
+async function fetchUserFromShare(secUid, userCookie = "") {
+  const candidates = userCookie ? [userCookie, DEFAULT_AC_COOKIES, ""] : [DEFAULT_AC_COOKIES, ""];
+  for (const cookie of candidates) {
     try {
       const headers = {
         "User-Agent": UA_MOBILE,
@@ -118,10 +120,11 @@ function mapPosts(list) {
 export async function parseUser(text, options = {}) {
   text = String(text || "").trim();
   if (!text) return { ok: false, msg: "请先粘贴用户主页链接或分享文案" };
+  const cookie = options.cookie || "";
 
   let raw = extractUrl(text);
   if (/v\.douyin\.com/i.test(raw)) {
-    raw = await expandShortLink(raw);
+    raw = await expandShortLink(raw, cookie);
     if (/^https:\/\/www\.douyin\.com\/?$/i.test(raw)) {
       return { ok: false, msg: "短链未能展开（可能被抖音限流），请粘贴用户主页长链接或 sec_uid" };
     }
@@ -131,7 +134,6 @@ export async function parseUser(text, options = {}) {
     return { ok: false, msg: "未识别到用户 sec_uid，请粘贴主页链接（www.douyin.com/user/MS4wLjAB...）或主页分享文案" };
   }
 
-  const cookie = options.cookie || "";
   const cursor = String(options.cursor || "0");
   const referer = `https://www.douyin.com/user/${secUid}`;
   const out = {
@@ -146,7 +148,7 @@ export async function parseUser(text, options = {}) {
   );
   out.user = (profile && profile.user)
     ? normalizeUser(profile.user)
-    : await fetchUserFromShare(secUid);
+    : await fetchUserFromShare(secUid, cookie);
   if (!out.user) {
     return { ok: false, msg: "未取到用户资料（可能被风控），请稍后重试或在设置中填写抖音 Cookie" };
   }
@@ -165,7 +167,7 @@ export async function parseUser(text, options = {}) {
     out.has_more = !!post.has_more;
     out.cursor = String(post.max_cursor || "0");
   } else {
-    out.posts_hint = "作品列表接口需要登录态 Cookie / a_bogus 签名，当前未取到；可在「设置 → 常规」填写抖音 Cookie 后重试，或粘贴单个作品链接用「作品解析」";
+    out.posts_hint = "作品列表接口需要登录态 Cookie / a_bogus 签名，当前未取到；可点右上角「🔑 Cookie」保存个人 Cookie 后重试，或用下方「批量解析作品链接」";
   }
   return out;
 }

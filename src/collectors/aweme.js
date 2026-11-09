@@ -173,6 +173,7 @@ async function fetchAwemeDetail(id, userCookie = "") {
 export async function parseAweme(text, options = {}) {
   text = String(text || "").trim();
   if (!text) return { ok: false, msg: "请先粘贴分享链接或文案" };
+  const userCookie = options.cookie || "";
 
   // 1. 提取链接
   const url = extractUrl(text);
@@ -185,7 +186,8 @@ export async function parseAweme(text, options = {}) {
   if (/v\.douyin\.com/i.test(url)) {
     const ttwid = await ensureTtwid();
     const slHeaders = { "User-Agent": UA_MOBILE };
-    if (ttwid) slHeaders.Cookie = `ttwid=${ttwid}`;
+    const slCookie = [ttwid ? `ttwid=${ttwid}` : "", userCookie].filter(Boolean).join("; ");
+    if (slCookie) slHeaders.Cookie = slCookie;
     const follow = async () => {
       const res = await undiciFetch(url, {
         headers: slHeaders,
@@ -232,7 +234,8 @@ export async function parseAweme(text, options = {}) {
       "Accept-Language": "zh-CN,zh;q=0.9",
       "Referer": "https://www.douyin.com/",
     };
-    if (ttwid) headers.Cookie = `ttwid=${ttwid}`;
+    const pageCookie = [ttwid ? `ttwid=${ttwid}` : "", userCookie].filter(Boolean).join("; ");
+    if (pageCookie) headers.Cookie = pageCookie;
     body = await httpGetText(pageUrl, { headers, timeout: 15000 });
   } catch (e) {
     return { ok: false, msg: `分享页请求失败: ${e && e.message ? e.message : e}` };

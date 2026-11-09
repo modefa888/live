@@ -64,6 +64,8 @@ export class MongoHistoryDB {
       // 登录会话持久化（跨实例共享；30 天自动过期）
       db.collection("sessions").createIndex({ token: 1 }, { unique: true }),
       db.collection("sessions").createIndex({ created_at: 1 }, { expireAfterSeconds: 30 * 86400 }),
+      // 个人解析 Cookie：按登录账号隔离（不进 config 集合、不出现在后台表）
+      db.collection("parse_cookies").createIndex({ username: 1 }, { unique: true }),
     ]);
   }
 
@@ -568,6 +570,30 @@ export class MongoHistoryDB {
       created_at: Number(r.created_at) || 0, updated_at: Number(r.updated_at) || 0,
       login_at: Number(r.login_at) || 0,
     }));
+  }
+
+  // ================= 个人解析 Cookie（按登录账号隔离，仅供作品/主页解析使用） =================
+
+  /** 保存/覆盖某账号的解析 Cookie；不写入 config、不记日志 */
+  async saveParseCookie(username, cookie) {
+    const db = await this._ensure();
+    await db.collection("parse_cookies").updateOne(
+      { username: String(username) },
+      { $set: { username: String(username), cookie: String(cookie || ""), updated_at: nowSec() } },
+      { upsert: true },
+    );
+  }
+
+  /** 读取某账号的解析 Cookie（仅服务端内部调用，接口不回传明文） */
+  async getParseCookie(username) {
+    const db = await this._ensure();
+    const row = await db.collection("parse_cookies").findOne({ username: String(username) });
+    return row ? String(row.cookie || "") : "";
+  }
+
+  async deleteParseCookie(username) {
+    const db = await this._ensure();
+    await db.collection("parse_cookies").deleteOne({ username: String(username) });
   }
 
   // ================= 管理后台计数 =================

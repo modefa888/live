@@ -28,7 +28,7 @@ const PROTECTED_PATHS = new Set([
   "/api/add", "/api/remove", "/api/record", "/api/config",
   "/api/import", "/api/pin", "/api/update", "/api/notify",
   "/api/backup/create", "/api/backup/restore", "/api/backup/delete",
-  "/api/storage/test", "/api/storage/copy",
+  "/api/storage/test", "/api/storage/copy", "/api/parse/cookie",
 ]);
 // 需要登录才能访问的 GET 接口；/api/square/* 与 /api/account/* 保持公开
 const PROTECTED_GET = new Set([
@@ -38,6 +38,7 @@ const PROTECTED_GET = new Set([
   "/api/notify", "/api/backup/list", "/api/fudai", "/api/fudai/right",
   "/api/storage/status", "/api/notify/logs", "/api/fudai/history", "/api/fudai/current",
   "/api/admin/tables", "/api/admin/records", "/api/parse/video", "/api/parse/user",
+  "/api/parse/cookie",
 ]);
 
 // 后台管理表定义（顺序与 Python TABLE_INFO 一致）
@@ -85,6 +86,16 @@ function q1(req, key, def = "") {
 function qint(req, key, def) {
   const n = parseInt(q1(req, key, String(def)), 10);
   return Number.isNaN(n) ? def : n;
+}
+
+// 当前登录账号的「个人解析 Cookie」：仅本人可用，未设置时回退到站点全局配置
+async function personalParseCookie(username) {
+  if (!username) return "";
+  try {
+    return String(await getBackend().getParseCookie(username) || "");
+  } catch {
+    return "";
+  }
 }
 
 function maskAuth(req) {
@@ -305,15 +316,59 @@ export function createApp(state, services) {
   app.get("/api/parse/video", authMw, ah(async (req, res) => {
     // 抖音作品解析：视频（无水印直链）/ 图集（图片 + 动图 + 实况图动态视频）
     const text = q1(req, "text");
-    res.json(await parseAweme(text, { cookie: String(state.config.cookie || "") }));
+    const [, user] = await checkAuth(req, res);
+    if (!user) return;
+    const personal = await personalParseCookie(user.username);
+    res.json(await parseAweme(text, { cookie: personal || String(state.config.cookie || "") }));
   }));
 
   app.get("/api/parse/user", authMw, ah(async (req, res) => {
     // 抖音用户主页解析：资料 + 作品列表（cursor 翻页）
+    const [, user] = await checkAuth(req, res);
+    if (!user) return;
+    const personal = await personalParseCookie(user.username);
     res.json(await parseUser(q1(req, "text"), {
-      cookie: String(state.config.cookie || ""),
+      cookie: personal || String(state.config.cookie || ""),
       cursor: q1(req, "cursor") || "0",
     }));
+  }));
+
+  // ---------- 个人解析 Cookie：按登录账号隔离，不进全局配置 / 后台表 / 日志 ----------
+  app.get("/api/parse/cookie", authMw, ah(async (req, res) => {
+    const [, user] = await checkAuth(req, res);
+    if (!user) return;
+    let cookie = "", updated_at = 0;
+    try {
+      const backend = getBackend();
+      cookie = String(await backend.getParseCookie(user.username) || "");
+      const coll = backend.collection && backend.collection("parse_cookies");
+      const row = coll ? await coll.findOne({ username: user.username }, { projection: { updated_at: 1 } }) : null;
+      updated_at = Number(row && row.updated_at) || 0;
+    } catch {}
+    // 状态接口不回传明文 Cookie，只返回长度与末尾 4 位
+    res.json({
+      ok: true, username: user.username, has: !!cookie,
+      length: cookie.length, tail: cookie ? cookie.slice(-4) : "", updated_at,
+    });
+  }));
+
+  app.post("/api/parse/cookie", authMw, ah(async (req, res) => {
+    const [, user] = await checkAuth(req, res);
+    if (!user) return;
+    const raw = String((req.body || {}).cookie || "").replace(/[\r\n]+/g, " ").trim();
+    if (raw.length > 8192) {
+      return res.status(400).json({ ok: false, msg: "Cookie 过长（上限 8192 字符）" });
+    }
+    try {
+      if (!raw) {
+        await getBackend().deleteParseCookie(user.username);
+        return res.json({ ok: true, has: false, msg: "已清除个人 Cookie" });
+      }
+      await getBackend().saveParseCookie(user.username, raw);
+      return res.json({ ok: true, has: true, length: raw.length, msg: "已保存个人 Cookie" });
+    } catch (e) {
+      return res.status(500).json({ ok: false, msg: `保存失败: ${e && e.message ? e.message : e}` });
+    }
   }));
 
   app.get("/api/refresh", authMw, ah(async (req, res) => {

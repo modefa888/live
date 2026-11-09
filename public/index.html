@@ -314,7 +314,7 @@
 <!-- 抖音作品解析（视频/图集/动图） -->
 <div class="modal-mask" id="parseMask">
   <div class="modal">
-    <div class="modal-head"><h3>🎬 作品解析</h3><button class="btn sm ghost" onclick="closeModal('parseMask')">✕</button></div>
+    <div class="modal-head"><h3>🎬 作品解析</h3><button class="btn sm ghost" id="parseCookieBtn" onclick="openCookiePanel()" title="保存仅本人使用的抖音 Cookie">🔑 Cookie</button><button class="btn sm ghost" onclick="closeModal('parseMask')">✕</button></div>
     <div class="modal-body">
       <label>粘贴 分享文案 / 短链 / 视频(图集)链接 / 作品ID（支持 视频 · 图集 · 图片 · 动图 · 实况图）</label>
       <textarea id="parseInput" rows="3" placeholder="例如: 7.43 pKc:/ 复制打开抖音看看... https://v.douyin.com/xxxxxxx/"
@@ -332,7 +332,7 @@
 <!-- 抖音用户主页解析 -->
 <div class="modal-mask" id="userMask">
   <div class="modal">
-    <div class="modal-head"><h3>👤 用户主页解析</h3><button class="btn sm ghost" onclick="closeModal('userMask')">✕</button></div>
+    <div class="modal-head"><h3>👤 用户主页解析</h3><button class="btn sm ghost" id="userCookieBtn" onclick="openCookiePanel()" title="保存仅本人使用的抖音 Cookie">🔑 Cookie</button><button class="btn sm ghost" onclick="closeModal('userMask')">✕</button></div>
     <div class="modal-body">
       <label>粘贴 用户主页分享文案 / 短链 / 主页链接 / sec_uid</label>
       <textarea id="userInput" rows="2" placeholder="例如: https://v.douyin.com/xxxxx/ 或 https://www.douyin.com/user/MS4wLjAB.../"
@@ -353,7 +353,26 @@
           </div>
         </div>
       </details>
-      <div class="hint">💡 资料来自抖音 web 接口；作品列表需登录态 Cookie，未取到时可用上方「批量解析作品链接」</div>
+      <div class="hint">💡 资料来自抖音 web 接口；作品列表需登录态 Cookie，可点右上角「🔑 Cookie」保存仅本人使用的 Cookie，或用上方「批量解析作品链接」</div>
+    </div>
+  </div>
+</div>
+
+<!-- 个人解析 Cookie（按登录账号隔离） -->
+<div class="modal-mask" id="cookieMask" style="z-index:80">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-head"><h3>🔑 个人 Cookie</h3><button class="btn sm ghost" onclick="closeModal('cookieMask')">✕</button></div>
+    <div class="modal-body">
+      <label>抖音网页版 Cookie（DevTools → Network → 任意 douyin.com 请求 → Request Headers → cookie，整行复制）</label>
+      <textarea id="cookieInput" rows="5" placeholder="ttwid=...; sessionid=...; ...（已保存时留空不动，粘贴新值即覆盖）"
+        style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--txt);resize:vertical;font-size:12px;outline:none"></textarea>
+      <div id="cookieStatus" class="hint" style="margin-top:8px">读取中…</div>
+      <div class="hint" style="margin-top:8px">💡 仅当前登录账号「<span id="cookieUser">—</span>」可用：按账号保存，不写入站点全局设置、后台表或日志，状态接口也不回传明文。保存后「作品解析 / 用户主页解析」优先使用它，未保存时回退到站点全局 Cookie 或匿名会话。作品列表仍可能受抖音 a_bogus 风控限制。</div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn primary" style="flex:1" onclick="saveParseCookie()">💾 保存</button>
+        <button class="btn" onclick="clearParseCookie()">🗑 清除</button>
+        <button class="btn" onclick="closeModal('cookieMask')">关闭</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1853,6 +1872,59 @@ function downloadAllParseVideos() {
   batchDownloadParsed(items, '动态视频下载已触发：');
 }
 
+// ================= 个人解析 Cookie（按登录账号隔离） =================
+async function loadParseCookieStatus() {
+  const status = $('cookieStatus');
+  try {
+    const r = await api('/api/parse/cookie');
+    if (status) {
+      status.textContent = r.has
+        ? '✅ 已保存个人 Cookie：' + r.length + ' 字符，末尾 …' + r.tail + '（仅账号 ' + r.username + ' 使用）'
+        : '未保存：当前使用站点全局 Cookie 或匿名会话';
+      status.style.color = r.has ? '#4ade80' : 'var(--dim)';
+    }
+    const userEl = $('cookieUser');
+    if (userEl) userEl.textContent = r.username || '—';
+    ['parseCookieBtn', 'userCookieBtn'].forEach(id => {
+      const b = $(id);
+      if (!b) return;
+      b.textContent = r.has ? '🔑 Cookie ✓' : '🔑 Cookie';
+      b.title = r.has ? '个人 Cookie 已保存（点击修改 / 清除）' : '保存仅本人使用的抖音 Cookie';
+    });
+  } catch (e) {
+    if (status) status.textContent = '状态读取失败: ' + (e.message || e);
+  }
+}
+
+function openCookiePanel() {
+  $('cookieInput').value = ''; // 不回显已保存的明文 Cookie
+  $('cookieMask').classList.add('show');
+  loadParseCookieStatus();
+  setTimeout(() => $('cookieInput').focus(), 50);
+}
+
+async function saveParseCookie() {
+  const v = $('cookieInput').value.trim();
+  if (!v) { toast('请先粘贴 Cookie，或点「清除」删除已保存的 Cookie'); return; }
+  const r = await api('/api/parse/cookie', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({cookie: v}),
+  });
+  if (!r.ok) { toast(r.msg || '保存失败', 'warn'); return; }
+  $('cookieInput').value = '';
+  await loadParseCookieStatus();
+  toast('个人 Cookie 已保存（仅当前账号使用）', 'ok');
+}
+
+async function clearParseCookie() {
+  const r = await api('/api/parse/cookie', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({cookie: ''}),
+  });
+  if (!r.ok) { toast(r.msg || '清除失败', 'warn'); return; }
+  $('cookieInput').value = '';
+  await loadParseCookieStatus();
+  toast('已清除个人 Cookie', 'ok');
+}
+
 // ================= 用户主页解析 =================
 function openUserPanel() {
   $('userMask').classList.add('show');
@@ -2028,7 +2100,7 @@ function parseVideoFallback(v) {
   }
 }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePlayer(); ['addMask','detailMask','confirmMask','historyMask','squareMask','parseMask','userMask'].forEach(closeModal); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePlayer(); ['addMask','detailMask','confirmMask','historyMask','squareMask','parseMask','userMask','cookieMask'].forEach(closeModal); } });
 document.querySelectorAll('.modal-mask').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); }));
 
 // ================= 直播广场 =================
@@ -2358,6 +2430,7 @@ function updateAuthUI(loggedIn, user) {
       <button class="btn sm ghost" onclick="doLogout()" style="margin-left:8px;padding:2px 8px">退出</button>`;
     status.style.display = 'flex';
     status.style.alignItems = 'center';
+    loadParseCookieStatus();
   } else if (HAS_ACCOUNTS) {
     status.innerHTML = `<span style="color:var(--dim);font-size:12px">未登录</span>
       <button class="btn sm" onclick="openLoginModal()" style="margin-left:8px;padding:2px 8px;font-size:11px">登录</button>`;
